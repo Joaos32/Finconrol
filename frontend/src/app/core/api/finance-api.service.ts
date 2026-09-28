@@ -1,0 +1,63 @@
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Injectable } from '@angular/core';
+import { Observable } from 'rxjs';
+import {
+  Account, AccountRequest, Category, CategoryRequest, DashboardSummary,
+  ExpenseCategory, MonthlyPoint, Transaction, TransactionFilters,
+  TransactionPage, TransactionRequest,
+} from '../models/finance.models';
+
+@Injectable({ providedIn: 'root' })
+export class FinanceApiService {
+  constructor(private readonly http: HttpClient) {}
+
+  accounts(): Observable<Account[]> {
+    return this.http.get<Account[]>('/api/accounts');
+  }
+  saveAccount(request: AccountRequest, id?: string): Observable<Account> {
+    return id ? this.http.put<Account>('/api/accounts/' + id, request)
+      : this.http.post<Account>('/api/accounts', request);
+  }
+  deleteAccount(id: string): Observable<void> {
+    return this.http.delete<void>('/api/accounts/' + id);
+  }
+  categories(type?: string): Observable<Category[]> {
+    const params = type ? new HttpParams().set('type', type) : undefined;
+    return this.http.get<Category[]>('/api/categories', { params });
+  }
+  saveCategory(request: CategoryRequest, id?: string): Observable<Category> {
+    return id ? this.http.put<Category>('/api/categories/' + id, request)
+      : this.http.post<Category>('/api/categories', request);
+  }
+  deleteCategory(id: string): Observable<void> {
+    return this.http.delete<void>('/api/categories/' + id);
+  }
+  transactions(filters: TransactionFilters = {}): Observable<TransactionPage> {
+    let params = new HttpParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') {
+        params = params.set(key, String(value));
+      }
+    });
+    return this.http.get<TransactionPage>('/api/transactions', { params });
+  }
+  saveTransaction(request: TransactionRequest, id?: string): Observable<Transaction> {
+    return id ? this.http.put<Transaction>('/api/transactions/' + id, request)
+      : this.http.post<Transaction>('/api/transactions', request);
+  }
+  deleteTransaction(id: string): Observable<void> {
+    return this.http.delete<void>('/api/transactions/' + id);
+  }
+  dashboardSummary(): Observable<DashboardSummary> {
+    return this.http.get<DashboardSummary>('/api/dashboard/summary');
+  }
+  expenseCategories(): Observable<ExpenseCategory[]> {
+    return this.http.get<ExpenseCategory[]>('/api/dashboard/expenses-by-category');
+  }
+  monthlyEvolution(): Observable<MonthlyPoint[]> {
+    return this.http.get<MonthlyPoint[]>('/api/dashboard/monthly-evolution');
+  }
+  recentTransactions(): Observable<Transaction[]> {
+    return this.http.get<Transaction[]>('/api/dashboard/recent-transactions');
+  }
+}

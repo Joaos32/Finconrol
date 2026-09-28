@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/fincontrol
+    username: test
+    password: test
+  jpa:
+    hibernate:
+      ddl-auto: validate
+fincontrol:
+  jwt:
+    secret: test-secret-12345678901234567890123456789012345678901234567890
+    expiration: PT15M

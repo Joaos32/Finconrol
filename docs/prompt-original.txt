@@ -1,0 +1,1242 @@
+Quero que você atue como um engenheiro de software Full Stack sênior e inicie a construção de uma aplicação chamada **FinControl**, um sistema moderno de gestão financeira pessoal.
+
+O projeto será usado como portfólio profissional, portanto não quero apenas um CRUD funcional. Quero uma aplicação com arquitetura organizada, boas práticas, segurança, testes, documentação e código com padrão próximo de produção.
+
+## 1. OBJETIVO DO PROJETO
+
+O FinControl será uma plataforma onde o usuário poderá:
+
+- criar uma conta;
+- realizar login;
+- cadastrar contas financeiras;
+- cadastrar categorias;
+- registrar receitas;
+- registrar despesas;
+- visualizar saldo;
+- acompanhar receitas e despesas;
+- visualizar um dashboard financeiro;
+- consultar histórico de transações.
+
+Nesta primeira etapa, NÃO implemente:
+
+- cartão de crédito;
+- parcelamentos;
+- despesas recorrentes;
+- metas financeiras;
+- RabbitMQ;
+- Redis;
+- IA;
+- integração bancária;
+- AWS;
+- microsserviços.
+
+Esses recursos serão adicionados posteriormente.
+
+O objetivo agora é criar um MVP muito bem estruturado e preparado para evolução.
+
+---
+
+# 2. STACK
+
+## Backend
+
+Utilizar:
+
+- Java 21;
+- Spring Boot 4.1.x;
+- Maven;
+- Spring Web;
+- Spring Data JPA;
+- Spring Security;
+- PostgreSQL;
+- JWT para autenticação;
+- Bean Validation;
+- Flyway para migrations;
+- MapStruct para mapeamento DTO/entity;
+- Lombok apenas quando fizer sentido;
+- OpenAPI/Swagger;
+- JUnit;
+- Mockito;
+- Testcontainers.
+
+Não utilizar H2 como banco principal.
+
+---
+
+## Frontend
+
+Utilizar:
+
+- Angular 22;
+- TypeScript;
+- Angular standalone components;
+- Angular Material;
+- Reactive Forms;
+- Signals quando forem adequados;
+- RxJS;
+- HttpClient;
+- Route Guards;
+- HTTP Interceptors;
+- SCSS.
+
+Criar uma interface moderna, responsiva, profissional e minimalista.
+
+Não quero aparência de projeto acadêmico.
+
+A aplicação deve ter aparência próxima de uma fintech/SaaS moderno.
+
+---
+
+# 3. ESTRUTURA DO REPOSITÓRIO
+
+Quero inicialmente um monorepo simples:
+
+fincontrol/
+│
+├── backend/
+│
+├── frontend/
+│
+├── docker-compose.yml
+├── .gitignore
+└── README.md
+
+Backend e frontend devem possuir configurações independentes.
+
+---
+
+# 4. ARQUITETURA DO BACKEND
+
+Não criar microsserviços neste momento.
+
+Utilizar monólito modular.
+
+Estrutura aproximada:
+
+com.fincontrol
+
+auth
+├── controller
+├── service
+├── dto
+├── security
+
+user
+├── controller
+├── service
+├── repository
+├── entity
+├── dto
+├── mapper
+
+account
+├── controller
+├── service
+├── repository
+├── entity
+├── dto
+├── mapper
+
+category
+├── controller
+├── service
+├── repository
+├── entity
+├── dto
+├── mapper
+
+transaction
+├── controller
+├── service
+├── repository
+├── entity
+├── dto
+├── mapper
+
+dashboard
+├── controller
+├── service
+├── dto
+
+shared
+├── exception
+├── config
+├── security
+├── response
+└── util
+
+Você pode melhorar essa estrutura se identificar uma abordagem mais adequada, mas preserve a separação por domínio.
+
+Evite uma arquitetura excessivamente complexa.
+
+---
+
+# 5. MODELAGEM INICIAL
+
+## User
+
+Campos:
+
+- id UUID;
+- name;
+- email;
+- passwordHash;
+- createdAt;
+- updatedAt.
+
+Regras:
+
+- email obrigatório;
+- email único;
+- senha nunca deve ser retornada pela API;
+- senha armazenada com BCrypt;
+- usuário só pode acessar seus próprios dados.
+
+---
+
+## Account
+
+Representa uma conta financeira.
+
+Campos:
+
+- id UUID;
+- user;
+- name;
+- type;
+- initialBalance;
+- createdAt;
+- updatedAt.
+
+AccountType:
+
+- CHECKING;
+- SAVINGS;
+- CASH;
+- INVESTMENT;
+- OTHER.
+
+Exemplos:
+
+- Nubank;
+- Conta Corrente;
+- Carteira;
+- Poupança.
+
+---
+
+## Category
+
+Campos:
+
+- id UUID;
+- user;
+- name;
+- type;
+- createdAt.
+
+CategoryType:
+
+- INCOME;
+- EXPENSE.
+
+Cada usuário deve possuir suas próprias categorias.
+
+No cadastro inicial do usuário, criar algumas categorias padrão.
+
+Exemplo de categorias de despesas:
+
+- Alimentação;
+- Moradia;
+- Transporte;
+- Saúde;
+- Educação;
+- Lazer;
+- Assinaturas;
+- Compras;
+- Outros.
+
+Categorias de receitas:
+
+- Salário;
+- Freelance;
+- Investimentos;
+- Outros.
+
+---
+
+## Transaction
+
+Campos:
+
+- id UUID;
+- user;
+- account;
+- category;
+- description;
+- amount;
+- type;
+- transactionDate;
+- createdAt;
+- updatedAt.
+
+TransactionType:
+
+- INCOME;
+- EXPENSE.
+
+Regras:
+
+- amount deve ser positivo;
+- o tipo da categoria precisa ser compatível com o tipo da transação;
+- a conta precisa pertencer ao usuário autenticado;
+- a categoria precisa pertencer ao usuário autenticado;
+- usuário não pode consultar ou alterar transações de outro usuário.
+
+Utilize BigDecimal para valores financeiros.
+
+Nunca utilize double ou float para dinheiro.
+
+---
+
+# 6. REGRA DE SALDO
+
+Não quero que o saldo atual seja simplesmente armazenado e atualizado sem necessidade.
+
+Calcule o saldo utilizando:
+
+saldo atual = saldo inicial + receitas - despesas
+
+O saldo deve ser calculado com base nas transações da conta.
+
+Crie métodos eficientes no repository para realizar agregações no banco sempre que possível.
+
+Evite carregar todas as transações na memória apenas para somar valores.
+
+---
+
+# 7. AUTENTICAÇÃO
+
+Implementar autenticação utilizando:
+
+Spring Security + JWT.
+
+Endpoints:
+
+POST /api/auth/register
+
+Body:
+
+{
+  "name": "João Silva",
+  "email": "joao@email.com",
+  "password": "Senha123!"
+}
+
+POST /api/auth/login
+
+Body:
+
+{
+  "email": "joao@email.com",
+  "password": "Senha123!"
+}
+
+Resposta:
+
+{
+  "accessToken": "...",
+  "tokenType": "Bearer"
+}
+
+Inicialmente pode ser utilizado apenas access token.
+
+Estruture o código de forma que refresh token possa ser adicionado posteriormente.
+
+JWT deve conter apenas informações mínimas necessárias.
+
+Nunca colocar dados sensíveis no token.
+
+---
+
+# 8. SEGURANÇA
+
+Essa parte é extremamente importante.
+
+Todas as rotas financeiras devem exigir autenticação.
+
+Exemplo:
+
+/api/accounts
+/api/categories
+/api/transactions
+/api/dashboard
+
+Não aceitar userId enviado pelo frontend para definir proprietário dos dados.
+
+O usuário deve sempre ser identificado através do token JWT.
+
+Exemplo errado:
+
+POST /transactions
+
+{
+  "userId": 10
+}
+
+Não fazer isso.
+
+O backend deve identificar o usuário autenticado através do SecurityContext.
+
+Todas as queries devem levar o usuário autenticado em consideração.
+
+Nunca usar:
+
+findById(id)
+
+quando existir possibilidade de consultar registros de outro usuário.
+
+Preferir algo equivalente a:
+
+findByIdAndUserId(...)
+
+para evitar IDOR.
+
+---
+
+# 9. ENDPOINTS
+
+## Accounts
+
+GET /api/accounts
+
+GET /api/accounts/{id}
+
+POST /api/accounts
+
+PUT /api/accounts/{id}
+
+DELETE /api/accounts/{id}
+
+GET /api/accounts/{id}/balance
+
+---
+
+## Categories
+
+GET /api/categories
+
+GET /api/categories?type=EXPENSE
+
+POST /api/categories
+
+PUT /api/categories/{id}
+
+DELETE /api/categories/{id}
+
+Impedir exclusão de categoria que esteja vinculada a transações, retornando uma mensagem adequada.
+
+---
+
+## Transactions
+
+GET /api/transactions
+
+Adicionar filtros:
+
+- startDate;
+- endDate;
+- type;
+- categoryId;
+- accountId.
+
+Adicionar paginação.
+
+Exemplo:
+
+GET /api/transactions?page=0&size=20
+
+Criar também:
+
+GET /api/transactions/{id}
+
+POST /api/transactions
+
+PUT /api/transactions/{id}
+
+DELETE /api/transactions/{id}
+
+Ordenar por transactionDate DESC por padrão.
+
+---
+
+# 10. DASHBOARD
+
+Criar:
+
+GET /api/dashboard/summary
+
+Exemplo de retorno:
+
+{
+  "currentBalance": 8420.00,
+  "monthlyIncome": 10500.00,
+  "monthlyExpense": 6780.00,
+  "monthlyResult": 3720.00
+}
+
+Criar também:
+
+GET /api/dashboard/expenses-by-category
+
+Retorno aproximado:
+
+[
+  {
+    "category": "Alimentação",
+    "amount": 850.00,
+    "percentage": 32.5
+  }
+]
+
+E:
+
+GET /api/dashboard/monthly-evolution
+
+Retorno:
+
+[
+  {
+    "month": "2026-06",
+    "income": 8000,
+    "expense": 5200
+  },
+  {
+    "month": "2026-07",
+    "income": 9000,
+    "expense": 6100
+  }
+]
+
+Utilizar queries agregadas no PostgreSQL/JPA sempre que fizer sentido.
+
+---
+
+# 11. TRATAMENTO DE ERROS
+
+Criar tratamento global utilizando:
+
+@RestControllerAdvice
+
+Padronizar erros.
+
+Exemplo:
+
+{
+  "timestamp": "2026-09-28T15:30:00",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Categoria incompatível com o tipo da transação",
+  "path": "/api/transactions"
+}
+
+Tratar pelo menos:
+
+- recurso não encontrado;
+- validação;
+- conflito;
+- acesso negado;
+- credenciais inválidas;
+- erro de regra de negócio.
+
+Evitar retornar stacktrace para o frontend.
+
+---
+
+# 12. MIGRATIONS
+
+Utilizar Flyway.
+
+Criar migrations para:
+
+- users;
+- accounts;
+- categories;
+- transactions;
+- constraints;
+- índices necessários.
+
+Criar índices pensando nas consultas mais utilizadas.
+
+Exemplo:
+
+transactions(user_id, transaction_date)
+
+transactions(user_id, account_id)
+
+transactions(user_id, category_id)
+
+Avalie quais índices são realmente necessários.
+
+---
+
+# 13. FRONTEND ANGULAR
+
+Criar estrutura aproximada:
+
+src/app
+
+core
+├── auth
+├── guards
+├── interceptors
+├── services
+└── models
+
+features
+├── auth
+├── dashboard
+├── accounts
+├── transactions
+├── categories
+
+shared
+├── components
+├── pipes
+└── directives
+
+layout
+├── sidebar
+├── navbar
+└── main-layout
+
+---
+
+# 14. TELAS
+
+Criar inicialmente:
+
+## Login
+
+Campos:
+
+- email;
+- senha.
+
+Link:
+
+"Criar minha conta"
+
+---
+
+## Cadastro
+
+Campos:
+
+- nome;
+- email;
+- senha;
+- confirmar senha.
+
+Aplicar validação.
+
+---
+
+## Dashboard
+
+Exibir cards:
+
+Saldo atual
+
+Receitas do mês
+
+Despesas do mês
+
+Resultado do mês
+
+Mostrar:
+
+- gráfico de receitas x despesas;
+- gráfico de despesas por categoria;
+- últimas transações;
+- contas cadastradas.
+
+---
+
+## Contas
+
+Tabela/cards contendo:
+
+- nome;
+- tipo;
+- saldo inicial;
+- saldo atual.
+
+Ações:
+
+- adicionar;
+- editar;
+- excluir.
+
+---
+
+## Transações
+
+Tabela contendo:
+
+- descrição;
+- categoria;
+- conta;
+- data;
+- tipo;
+- valor.
+
+Receita deve possuir diferenciação visual em relação a despesa.
+
+Adicionar:
+
+- filtros;
+- paginação;
+- botão "Nova transação".
+
+---
+
+## Nova transação
+
+Campos:
+
+- descrição;
+- valor;
+- tipo;
+- categoria;
+- conta;
+- data.
+
+Ao escolher:
+
+INCOME
+
+mostrar apenas categorias INCOME.
+
+Ao escolher:
+
+EXPENSE
+
+mostrar apenas categorias EXPENSE.
+
+---
+
+## Categorias
+
+Mostrar separadamente:
+
+Receitas
+
+Despesas
+
+Permitir:
+
+- criar;
+- editar;
+- excluir.
+
+---
+
+# 15. UX/UI
+
+Quero interface profissional.
+
+Referência visual:
+
+dashboard de fintech moderna.
+
+Utilizar:
+
+- sidebar;
+- navbar;
+- cards;
+- espaçamento consistente;
+- tipografia limpa;
+- feedback de carregamento;
+- skeleton ou progress indicator;
+- mensagens de erro amigáveis;
+- empty states.
+
+Não utilizar excesso de cores.
+
+Não criar layout infantil ou excessivamente chamativo.
+
+O sistema deve funcionar bem em desktop e mobile.
+
+---
+
+# 16. INTEGRAÇÃO ANGULAR + JWT
+
+Criar:
+
+AuthService
+
+AuthGuard
+
+AuthInterceptor
+
+O interceptor deve automaticamente incluir:
+
+Authorization: Bearer TOKEN
+
+nas requisições autenticadas.
+
+Ao receber 401:
+
+- limpar autenticação;
+- direcionar para login.
+
+Não armazenar senha.
+
+Não colocar informações sensíveis em localStorage.
+
+Para o MVP, o token pode ser armazenado de maneira simples, mas deixe documentado no README que uma evolução futura poderá utilizar cookie HttpOnly para melhorar a estratégia de armazenamento de tokens.
+
+---
+
+# 17. FORMS
+
+Utilizar Reactive Forms.
+
+Adicionar:
+
+- required;
+- validação de email;
+- tamanho mínimo de senha;
+- validação de valores;
+- mensagens de erro específicas.
+
+Exemplo:
+
+Não mostrar apenas:
+
+"Invalid"
+
+Mostrar:
+
+"O valor deve ser maior que zero."
+
+---
+
+# 18. TESTES BACKEND
+
+Criar testes relevantes.
+
+Priorizar:
+
+AuthService
+
+TransactionService
+
+AccountService
+
+DashboardService
+
+Testar regras como:
+
+- usuário não pode acessar conta de outro usuário;
+- usuário não pode utilizar categoria de outro usuário;
+- despesa não aceita categoria INCOME;
+- receita não aceita categoria EXPENSE;
+- valor não pode ser negativo;
+- saldo deve ser calculado corretamente.
+
+Utilizar Mockito para testes unitários.
+
+Utilizar Testcontainers + PostgreSQL para alguns testes de integração importantes.
+
+Não criar testes inúteis apenas para aumentar cobertura.
+
+---
+
+# 19. DOCKER
+
+Criar Dockerfile para backend.
+
+Criar Dockerfile para frontend se fizer sentido nesta fase.
+
+Criar docker-compose.yml contendo pelo menos:
+
+postgres
+
+backend
+
+Opcionalmente frontend.
+
+Configurar:
+
+- database;
+- username;
+- password;
+- ports;
+- healthcheck.
+
+Não colocar senhas reais no Git.
+
+Criar:
+
+.env.example
+
+---
+
+# 20. CONFIGURAÇÕES
+
+Utilizar variáveis de ambiente para:
+
+DATABASE_URL
+
+DATABASE_USERNAME
+
+DATABASE_PASSWORD
+
+JWT_SECRET
+
+JWT_EXPIRATION
+
+Não versionar secrets.
+
+Criar profiles:
+
+application.yml
+
+application-dev.yml
+
+application-prod.yml
+
+---
+
+# 21. DOCUMENTAÇÃO
+
+Configurar Swagger/OpenAPI.
+
+Swagger disponível em ambiente de desenvolvimento.
+
+Documentar endpoints principais.
+
+Criar README profissional contendo:
+
+# FinControl
+
+Descrição.
+
+## Funcionalidades
+
+## Tecnologias
+
+## Arquitetura
+
+## Como executar
+
+## Variáveis de ambiente
+
+## Docker
+
+## API
+
+## Testes
+
+## Roadmap
+
+Adicionar roadmap:
+
+V1
+- contas;
+- categorias;
+- receitas;
+- despesas;
+- dashboard.
+
+V2
+- cartões;
+- faturas;
+- parcelamentos;
+- recorrências;
+- orçamentos;
+- metas.
+
+V3
+- relatórios;
+- importação de extratos;
+- insights.
+
+V4
+- Redis;
+- RabbitMQ;
+- AWS;
+- observabilidade.
+
+V5
+- IA financeira.
+
+---
+
+# 22. QUALIDADE DE CÓDIGO
+
+Aplicar:
+
+SOLID quando fizer sentido.
+
+Evitar:
+
+God classes.
+
+Evitar:
+
+controllers contendo regra de negócio.
+
+Controllers devem receber requisição e delegar para services.
+
+Services devem conter regras de negócio.
+
+Repositories devem cuidar do acesso aos dados.
+
+DTOs devem ser utilizados nas APIs.
+
+Não retornar entidades JPA diretamente.
+
+Não expor passwordHash.
+
+Utilizar nomes claros.
+
+Evitar abstrações desnecessárias.
+
+Não criar interfaces para services apenas por padrão se não houver necessidade real.
+
+Não implementar Design Patterns apenas para dizer que utilizou Design Patterns.
+
+Priorizar legibilidade.
+
+---
+
+# 23. GIT
+
+Criar .gitignore adequado para:
+
+Java
+
+Maven
+
+Angular
+
+Node
+
+IntelliJ
+
+VS Code
+
+.env
+
+logs
+
+builds
+
+---
+
+# 24. DADOS DE DESENVOLVIMENTO
+
+Criar mecanismo separado para popular dados apenas em ambiente dev.
+
+Criar usuário de demonstração:
+
+Email:
+
+demo@fincontrol.dev
+
+Senha:
+
+Demo@123
+
+Criar:
+
+2 contas;
+
+categorias;
+
+aproximadamente 15 transações.
+
+Não executar seed automaticamente em produção.
+
+---
+
+# 25. REQUISITOS NÃO FUNCIONAIS
+
+A aplicação deve:
+
+- validar dados no frontend e backend;
+- utilizar UTC ou estratégia consistente para datas;
+- utilizar BigDecimal no backend;
+- utilizar UUID como identificador;
+- possuir paginação;
+- evitar N+1 queries;
+- possuir índices adequados;
+- evitar exposição de informações sensíveis;
+- possuir CORS configurável;
+- possuir logs úteis;
+- não registrar senha ou JWT completo nos logs.
+
+---
+
+# 26. PRIMEIRA EXECUÇÃO
+
+Agora execute a implementação por etapas.
+
+Antes de alterar arquivos:
+
+1. analise o diretório/repositório atual;
+2. identifique se já existe algum código;
+3. preserve código existente que seja aproveitável;
+4. não sobrescreva configurações importantes desnecessariamente.
+
+Caso o repositório esteja vazio:
+
+crie a estrutura do projeto.
+
+---
+
+# 27. ORDEM DE IMPLEMENTAÇÃO
+
+Nesta primeira execução priorize:
+
+1. estrutura do repositório;
+2. backend Spring Boot;
+3. PostgreSQL;
+4. migrations Flyway;
+5. entidades;
+6. repositories;
+7. autenticação JWT;
+8. contas;
+9. categorias;
+10. transações;
+11. tratamento de erros;
+12. testes essenciais;
+13. Swagger;
+14. docker-compose;
+15. README inicial;
+16. estrutura base do Angular;
+17. autenticação Angular;
+18. layout principal;
+19. dashboard inicial;
+20. telas de contas e transações.
+
+Não implemente Redis, RabbitMQ, IA, cartões ou AWS ainda.
+
+---
+
+# 28. FORMA DE TRABALHO
+
+Não apenas descreva o que deve ser feito.
+
+Implemente.
+
+Crie e altere os arquivos necessários.
+
+Execute comandos disponíveis no ambiente para validar o projeto.
+
+Sempre que concluir uma parte relevante:
+
+- compile;
+- rode os testes;
+- corrija erros antes de avançar.
+
+Backend:
+
+./mvnw test
+
+ou equivalente.
+
+Frontend:
+
+npm install
+
+npm run build
+
+Execute também lint se estiver configurado.
+
+---
+
+# 29. NÃO FAÇA
+
+Não gerar código fictício.
+
+Não deixar métodos importantes com TODO.
+
+Não utilizar mocks no código de produção.
+
+Não criar endpoints sem implementação.
+
+Não ignorar erros de compilação.
+
+Não desabilitar segurança apenas para fazer o sistema funcionar.
+
+Não colocar JWT secret diretamente no código.
+
+Não utilizar `ddl-auto=create`.
+
+Não utilizar `ddl-auto=update` como estratégia de produção.
+
+Utilizar Flyway.
+
+Não misturar regra de negócio no Angular.
+
+O backend deve ser a fonte de verdade das regras financeiras.
+
+---
+
+# 30. CRITÉRIOS DE ACEITE DA PRIMEIRA ENTREGA
+
+Considerarei esta etapa concluída quando for possível:
+
+1. subir PostgreSQL;
+2. subir backend;
+3. criar usuário;
+4. realizar login;
+5. receber JWT;
+6. criar uma conta;
+7. consultar contas;
+8. criar categoria;
+9. criar receita;
+10. criar despesa;
+11. consultar transações;
+12. filtrar transações;
+13. visualizar saldo calculado;
+14. obter resumo do dashboard;
+15. acessar a aplicação Angular;
+16. realizar login pelo Angular;
+17. visualizar dashboard;
+18. cadastrar conta;
+19. cadastrar transação;
+20. consultar histórico.
+
+Além disso:
+
+- backend deve compilar;
+- frontend deve compilar;
+- testes essenciais devem passar;
+- Swagger deve funcionar;
+- aplicação deve rodar com configuração documentada.
+
+---
+
+# 31. AO FINAL
+
+Após implementar, apresente um relatório curto contendo:
+
+- arquivos principais criados;
+- arquitetura utilizada;
+- endpoints implementados;
+- migrations criadas;
+- testes existentes;
+- comandos utilizados para validação;
+- resultados dos testes/builds;
+- funcionalidades concluídas;
+- funcionalidades que ainda pertencem às próximas versões;
+- eventuais decisões técnicas importantes.
+
+Se encontrar um problema durante a implementação, tente resolvê-lo antes de parar.
+
+Não avance para funcionalidades da V2 enquanto os requisitos principais da V1 não estiverem funcionando.

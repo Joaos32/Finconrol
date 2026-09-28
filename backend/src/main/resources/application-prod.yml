@@ -1,0 +1,15 @@
+fincontrol:
+  seed:
+    enabled: false
+  swagger:
+    enabled: false
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+spring:
+  jpa:
+    show-sql: false
+server:
+  forward-headers-strategy: framework
