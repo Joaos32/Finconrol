@@ -36,9 +36,14 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Testcontainers(disabledWithoutDocker = true)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+        "fincontrol.swagger.enabled=true",
+        "springdoc.api-docs.enabled=true",
+        "springdoc.swagger-ui.enabled=true"
+})
 @ActiveProfiles("test")
 @AutoConfigureTestRestTemplate
 class FinancialApiAcceptanceTest {
@@ -56,6 +61,15 @@ class FinancialApiAcceptanceTest {
     }
 
     @Autowired private TestRestTemplate http;
+
+    @Test
+    void exposesOpenApiContractWhenSwaggerIsEnabled() {
+        ResponseEntity<String> documentation = http.getForEntity("/v3/api-docs", String.class);
+
+        assertEquals(HttpStatus.OK, documentation.getStatusCode());
+        assertNotNull(documentation.getBody());
+        assertTrue(documentation.getBody().contains("/api/transactions"));
+    }
 
     @Test
     void registersLogsInAndCompletesPersonalFinanceFlow() {
