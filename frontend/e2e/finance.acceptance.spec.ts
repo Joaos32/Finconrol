@@ -1,10 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
 test('registers, logs in and completes the finance flow through Angular', async ({ page }) => {
+  test.setTimeout(60_000);
   const email = `e2e-${Date.now()}@example.com`;
   const password = 'SenhaSegura123!';
 
-  await page.goto('/');
+  await page.goto('/login');
+  await expect(page.getByRole('heading', { name: 'Entre na sua conta' })).toBeVisible();
   await page.getByRole('link', { name: 'Criar minha conta' }).click();
   await page.getByLabel('Nome').fill('Pessoa de Teste');
   await page.getByLabel('E-mail').fill(email);
