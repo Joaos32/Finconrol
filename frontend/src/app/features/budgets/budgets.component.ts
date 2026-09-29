@@ -42,7 +42,7 @@ function currentMonth(): string {
       <section class="panel form-panel">
         <div class="panel-heading"><div><h2>{{ editingId() ? 'Editar orçamento' : 'Novo orçamento' }}</h2><p>Escolha uma categoria de despesa e defina o limite do mês.</p></div></div>
         <form [formGroup]="form" (ngSubmit)="save()" class="form-grid form-grid-3 budget-form">
-          <mat-form-field appearance="outline">
+          <mat-form-field appearance="outline" floatLabel="always">
             <mat-label>Categoria de despesa</mat-label>
             <mat-select formControlName="categoryId" [disabled]="checkingMonth() || !budgetOptionsReady()">
               @for (category of availableCategories(); track category.id) {
