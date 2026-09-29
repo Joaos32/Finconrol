@@ -33,6 +33,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/categories/categories.component').then((m) => m.CategoriesComponent),
         title: 'Categorias · FinControl',
       },
+      {
+        path: 'budgets',
+        loadComponent: () => import('./features/budgets/budgets.component').then((m) => m.BudgetsComponent),
+        title: 'Orçamentos · FinControl',
+      },
     ],
   },
   { path: '**', redirectTo: 'dashboard' },

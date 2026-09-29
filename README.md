@@ -1,6 +1,6 @@
 # FinControl
 
-FinControl é um sistema de gestão financeira pessoal em monólito modular, com API Spring Boot e interface Angular. Este repositório contém a base da V1: autenticação, contas, categorias, receitas, despesas, saldo calculado e dashboard.
+FinControl é um sistema de gestão financeira pessoal em monólito modular, com API Spring Boot e interface Angular. O projeto cobre a V1 e iniciou a V2 com orçamentos mensais por categoria.
 
 ## Funcionalidades
 
@@ -9,6 +9,7 @@ FinControl é um sistema de gestão financeira pessoal em monólito modular, com
 - CRUD de contas, categorias e transações.
 - Paginação e filtros por período, conta, categoria e tipo.
 - Saldo e indicadores do dashboard calculados a partir das transações.
+- Orçamentos mensais por categoria de despesa, com gasto, valor disponível e alerta de limite excedido.
 - Migrations versionadas com Flyway.
 
 ## Tecnologias
@@ -50,6 +51,7 @@ O MVP guarda o access token em sessionStorage, que é limpo ao fechar a sessão 
 - /api/accounts e /api/accounts/{id}/balance
 - /api/categories
 - /api/transactions com paginação e filtros
+- /api/budgets?month=AAAA-MM para consultar orçamentos do mês; POST, PUT e DELETE em /api/budgets
 - /api/dashboard/summary, /expenses-by-category, /monthly-evolution e /recent-transactions
 - /v3/api-docs e /swagger-ui.html
 
@@ -64,7 +66,7 @@ Em backend/, execute mvn test. Testes de integração PostgreSQL usam Testcontai
 ## Roadmap
 
 - V1: contas, categorias, receitas, despesas e dashboard.
-- V2: cartões, faturas, parcelamentos, recorrências, orçamentos e metas.
+- V2: orçamentos mensais por categoria (implementado); cartões, faturas, parcelamentos, recorrências e metas.
 - V3: relatórios, importação de extratos e insights.
 - V4: Redis, RabbitMQ, AWS e observabilidade.
 - V5: recursos de IA financeira.

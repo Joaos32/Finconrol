@@ -28,6 +28,9 @@ import { AuthService } from '../core/auth/auth.service';
           <a routerLink="/categories" routerLinkActive="nav-active" (click)="closeMenu()">
             <span class="nav-icon">CA</span><span>Categorias</span>
           </a>
+          <a routerLink="/budgets" routerLinkActive="nav-active" (click)="closeMenu()">
+            <span class="nav-icon">OR</span><span>Orçamentos</span>
+          </a>
         </nav>
 
         <div class="sidebar-bottom">

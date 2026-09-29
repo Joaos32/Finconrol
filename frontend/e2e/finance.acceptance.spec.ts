@@ -57,6 +57,14 @@ test('registers, logs in and completes the finance flow through Angular', async 
     description: 'Compra E2E', amount: '35.50', type: 'Despesa', account: 'Conta E2E Atualizada', category: 'Mercado E2E',
   });
 
+  await page.getByRole('link', { name: /Orçamentos/ }).click();
+  await expect(page.getByRole('heading', { name: 'Orçamentos' })).toBeVisible();
+  await createBudget(page, 'Mercado E2E', currentMonth(), '40');
+  const budgetCard = page.locator('.budget-card').filter({ hasText: 'Mercado E2E' });
+  await expect(budgetCard).toContainText('35,50');
+  await expect(budgetCard).toContainText('4,50');
+  await expect(budgetCard).toContainText('88,8%');
+
   await page.getByRole('link', { name: 'Dashboard' }).click();
   await expect(page.getByRole('heading', { name: 'Seu dinheiro, com clareza.' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Resumo financeiro' })).toContainText('264,50');
@@ -81,6 +89,23 @@ test('registers, logs in and completes the finance flow through Angular', async 
   await page.getByRole('button', { name: 'Salvar transação' }).click();
   const updatedExpenseRow = page.getByRole('row', { name: /Compra E2E/ });
   await expect(updatedExpenseRow).toContainText('36,00');
+
+  await page.getByRole('link', { name: /Orçamentos/ }).click();
+  await expect(budgetCard).toContainText('36,00');
+  await expect(budgetCard).toContainText('4,00');
+  const previousMonth = previousCalendarMonth(currentMonth());
+  await page.getByLabel('Mês exibido').fill(previousMonth);
+  await expect(page.getByRole('heading', { name: 'Nenhum orçamento neste mês' })).toBeVisible();
+  await page.getByLabel('Mês exibido').fill(currentMonth());
+  await expect(budgetCard).toBeVisible();
+  await budgetCard.getByRole('button', { name: 'Editar orçamento de Mercado E2E' }).click();
+  await page.getByLabel('Limite mensal').fill('30');
+  await page.getByRole('button', { name: 'Salvar orçamento' }).click();
+  await expect(budgetCard).toContainText('6,00');
+  await expect(budgetCard).toContainText('120,0%');
+  page.once('dialog', (dialog) => dialog.accept());
+  await budgetCard.getByRole('button', { name: 'Excluir orçamento de Mercado E2E' }).click();
+  await expect(budgetCard).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Limpar' }).click();
   page.once('dialog', (dialog) => dialog.accept());
@@ -115,6 +140,27 @@ async function createCategory(page: Page, name: string, type: 'Receita' | 'Despe
   await page.getByRole('option', { name: type }).click();
   await page.getByRole('button', { name: 'Salvar categoria' }).click();
   await expect(page.getByText(name, { exact: true })).toBeVisible();
+}
+
+async function createBudget(page: Page, category: string, month: string, limit: string): Promise<void> {
+  await page.getByRole('button', { name: /Definir orçamento/ }).click();
+  await page.getByLabel('Categoria de despesa').click();
+  await page.getByRole('option', { name: category }).click();
+  await page.getByLabel('Mês do orçamento').fill(month);
+  await page.getByLabel('Limite mensal').fill(limit);
+  await page.getByRole('button', { name: 'Salvar orçamento' }).click();
+  await expect(page.locator('.budget-card').filter({ hasText: category })).toBeVisible();
+}
+
+function currentMonth(): string {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function previousCalendarMonth(month: string): string {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const previous = new Date(year, monthNumber - 2, 1);
+  return `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, '0')}`;
 }
 
 async function createTransaction(page: Page, data: {

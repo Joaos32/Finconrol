@@ -2,6 +2,7 @@ package com.fincontrol.transaction.repository;
 
 import com.fincontrol.transaction.entity.TransactionEntity;
 import com.fincontrol.transaction.entity.TransactionType;
+import com.fincontrol.budget.repository.BudgetExpenseTotalProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -56,5 +57,15 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
             ORDER BY date_trunc('month', transaction_date)
             """, nativeQuery = true)
     List<MonthlyAggregateProjection> monthlyTotals(
+            @Param("userId") UUID userId, @Param("start") LocalDate start, @Param("end") LocalDate end);
+
+    @Query(value = """
+            SELECT category_id AS "categoryId", SUM(amount) AS "spentAmount"
+            FROM transactions
+            WHERE user_id = :userId AND type = 'EXPENSE'
+              AND transaction_date >= :start AND transaction_date < :end
+            GROUP BY category_id
+            """, nativeQuery = true)
+    List<BudgetExpenseTotalProjection> budgetExpenseTotals(
             @Param("userId") UUID userId, @Param("start") LocalDate start, @Param("end") LocalDate end);
 }

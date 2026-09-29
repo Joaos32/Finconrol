@@ -1,5 +1,6 @@
 package com.fincontrol.category.service;
 
+import com.fincontrol.budget.repository.BudgetRepository;
 import com.fincontrol.category.dto.CategoryDtos;
 import com.fincontrol.category.entity.CategoryEntity;
 import com.fincontrol.category.entity.CategoryType;
@@ -18,13 +19,15 @@ import java.util.UUID;
 public class CategoryService {
     private final CategoryRepository categories;
     private final TransactionRepository transactions;
+    private final BudgetRepository budgets;
     private final UserRepository users;
     private final CategoryMapper mapper;
 
-    public CategoryService(CategoryRepository categories, TransactionRepository transactions, UserRepository users,
-                           CategoryMapper mapper) {
+    public CategoryService(CategoryRepository categories, TransactionRepository transactions, BudgetRepository budgets,
+                           UserRepository users, CategoryMapper mapper) {
         this.categories = categories;
         this.transactions = transactions;
+        this.budgets = budgets;
         this.users = users;
         this.mapper = mapper;
     }
@@ -49,8 +52,9 @@ public class CategoryService {
     public CategoryDtos.Response update(UUID userId, UUID categoryId, CategoryDtos.Request request) {
         CategoryEntity entity = findOwned(userId, categoryId);
         ensureUnique(userId, request.type(), request.name(), categoryId);
-        if (entity.getType() != request.type() && transactions.existsByCategoryIdAndUserId(categoryId, userId)) {
-            throw ApiException.conflict("Não é possível alterar o tipo de uma categoria vinculada a transações.");
+        if (entity.getType() != request.type() && (transactions.existsByCategoryIdAndUserId(categoryId, userId)
+                || budgets.existsByCategoryIdAndUserId(categoryId, userId))) {
+            throw ApiException.conflict("Não é possível alterar o tipo de uma categoria vinculada a transações ou orçamentos.");
         }
         entity.update(request.name().trim(), request.type());
         return mapper.toResponse(entity);
@@ -61,6 +65,9 @@ public class CategoryService {
         CategoryEntity entity = findOwned(userId, categoryId);
         if (transactions.existsByCategoryIdAndUserId(categoryId, userId)) {
             throw ApiException.conflict("Não é possível excluir uma categoria vinculada a transações.");
+        }
+        if (budgets.existsByCategoryIdAndUserId(categoryId, userId)) {
+            throw ApiException.conflict("Não é possível excluir uma categoria vinculada a orçamentos.");
         }
         categories.delete(entity);
     }

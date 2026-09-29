@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
-  Account, AccountRequest, Category, CategoryRequest, DashboardSummary,
+  Account, AccountRequest, Budget, BudgetRequest, Category, CategoryRequest, DashboardSummary,
   ExpenseCategory, MonthlyPoint, Transaction, TransactionFilters,
   TransactionPage, TransactionRequest,
 } from '../models/finance.models';
@@ -31,6 +31,16 @@ export class FinanceApiService {
   }
   deleteCategory(id: string): Observable<void> {
     return this.http.delete<void>('/api/categories/' + id);
+  }
+  budgets(month: string): Observable<Budget[]> {
+    return this.http.get<Budget[]>('/api/budgets', { params: new HttpParams().set('month', month) });
+  }
+  saveBudget(request: BudgetRequest, id?: string): Observable<Budget> {
+    return id ? this.http.put<Budget>('/api/budgets/' + id, request)
+      : this.http.post<Budget>('/api/budgets', request);
+  }
+  deleteBudget(id: string): Observable<void> {
+    return this.http.delete<void>('/api/budgets/' + id);
   }
   transactions(filters: TransactionFilters = {}): Observable<TransactionPage> {
     let params = new HttpParams();

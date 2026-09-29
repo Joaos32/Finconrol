@@ -3,6 +3,7 @@ package com.fincontrol;
 import com.fincontrol.account.dto.AccountDtos;
 import com.fincontrol.account.entity.AccountType;
 import com.fincontrol.auth.dto.AuthDtos;
+import com.fincontrol.budget.dto.BudgetDtos;
 import com.fincontrol.category.dto.CategoryDtos;
 import com.fincontrol.category.entity.CategoryType;
 import com.fincontrol.dashboard.dto.DashboardDtos;
@@ -30,6 +31,7 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
@@ -69,11 +71,14 @@ class FinancialApiAcceptanceTest {
         assertEquals(HttpStatus.OK, documentation.getStatusCode());
         assertNotNull(documentation.getBody());
         assertTrue(documentation.getBody().contains("/api/transactions"));
+        assertTrue(documentation.getBody().contains("/api/budgets"));
     }
 
     @Test
     void registersLogsInAndCompletesPersonalFinanceFlow() {
         assertEquals(HttpStatus.UNAUTHORIZED, http.getForEntity("/api/accounts", Object.class).getStatusCode());
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                http.getForEntity("/api/budgets?month=2026-06", Object.class).getStatusCode());
 
         String email = "acceptance-" + UUID.randomUUID() + "@example.com";
         AuthDtos.AuthResponse registration = http.postForEntity("/api/auth/register",
@@ -139,6 +144,86 @@ class FinancialApiAcceptanceTest {
         ResponseEntity<String> foreignAccount = http.exchange("/api/accounts/" + account.id(), HttpMethod.GET,
                 authorized(otherUserToken), String.class);
         assertEquals(HttpStatus.NOT_FOUND, foreignAccount.getStatusCode());
+
+        YearMonth month = YearMonth.from(today);
+        List<TransactionDtos.Request> periodExpenses = List.of(
+                new TransactionDtos.Request("Primeiro dia do mês", new BigDecimal("10.00"), TransactionType.EXPENSE,
+                        account.id(), expenseCategory.id(), month.atDay(1)),
+                new TransactionDtos.Request("Último dia do mês", new BigDecimal("20.00"), TransactionType.EXPENSE,
+                        account.id(), expenseCategory.id(), month.atEndOfMonth()),
+                new TransactionDtos.Request("Mês anterior", new BigDecimal("30.00"), TransactionType.EXPENSE,
+                        account.id(), expenseCategory.id(), month.minusMonths(1).atEndOfMonth()),
+                new TransactionDtos.Request("Mês seguinte", new BigDecimal("40.00"), TransactionType.EXPENSE,
+                        account.id(), expenseCategory.id(), month.plusMonths(1).atDay(1)));
+        periodExpenses.forEach(request -> exchange("/api/transactions", HttpMethod.POST, request,
+                token, TransactionDtos.Response.class));
+
+        String monthValue = month.toString();
+        BudgetDtos.Request budgetRequest = new BudgetDtos.Request(expenseCategory.id(), monthValue,
+                new BigDecimal("70.00"));
+        ResponseEntity<BudgetDtos.Response> createdBudget = exchange("/api/budgets", HttpMethod.POST,
+                budgetRequest, token, BudgetDtos.Response.class);
+        assertEquals(HttpStatus.CREATED, createdBudget.getStatusCode());
+        assertEquals(new BigDecimal("75.50"), createdBudget.getBody().spentAmount());
+        assertEquals(new BigDecimal("-5.50"), createdBudget.getBody().remainingAmount());
+        assertEquals(new BigDecimal("107.9"), createdBudget.getBody().percentageUsed());
+
+        ResponseEntity<List<BudgetDtos.Response>> listedBudgets = http.exchange("/api/budgets?month=" + monthValue,
+                HttpMethod.GET, authorized(token), new ParameterizedTypeReference<>() { });
+        assertEquals(1, listedBudgets.getBody().size());
+        assertEquals(0, http.exchange("/api/budgets?month=" + month.minusMonths(1), HttpMethod.GET,
+                authorized(token), new ParameterizedTypeReference<List<BudgetDtos.Response>>() { }).getBody().size());
+        assertEquals(0, http.exchange("/api/budgets?month=" + monthValue, HttpMethod.GET,
+                authorized(otherUserToken), new ParameterizedTypeReference<List<BudgetDtos.Response>>() { }).getBody().size());
+
+        ResponseEntity<String> duplicateBudget = http.exchange("/api/budgets", HttpMethod.POST,
+                new HttpEntity<>(budgetRequest, authorized(token).getHeaders()), String.class);
+        assertEquals(HttpStatus.CONFLICT, duplicateBudget.getStatusCode());
+        ResponseEntity<String> incomeBudget = http.exchange("/api/budgets", HttpMethod.POST,
+                new HttpEntity<>(new BudgetDtos.Request(incomeCategory.id(), monthValue, new BigDecimal("50.00")),
+                        authorized(token).getHeaders()), String.class);
+        assertEquals(HttpStatus.BAD_REQUEST, incomeBudget.getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST, http.exchange("/api/budgets?month=2026-13", HttpMethod.GET,
+                authorized(token), String.class).getStatusCode());
+
+        CategoryDtos.Response foreignCategory = exchange("/api/categories", HttpMethod.POST,
+                new CategoryDtos.Request("Categoria de outra pessoa", CategoryType.EXPENSE), otherUserToken,
+                CategoryDtos.Response.class).getBody();
+        ResponseEntity<String> foreignBudget = http.exchange("/api/budgets", HttpMethod.POST,
+                new HttpEntity<>(new BudgetDtos.Request(foreignCategory.id(), monthValue, new BigDecimal("50.00")),
+                        authorized(token).getHeaders()), String.class);
+        assertEquals(HttpStatus.NOT_FOUND, foreignBudget.getStatusCode());
+
+        BudgetDtos.Response budget = createdBudget.getBody();
+        ResponseEntity<BudgetDtos.Response> updatedBudget = exchange("/api/budgets/" + budget.id(), HttpMethod.PUT,
+                new BudgetDtos.Request(expenseCategory.id(), monthValue, new BigDecimal("80.00")),
+                token, BudgetDtos.Response.class);
+        assertEquals(HttpStatus.OK, updatedBudget.getStatusCode());
+        assertEquals(new BigDecimal("4.50"), updatedBudget.getBody().remainingAmount());
+        assertEquals(HttpStatus.NOT_FOUND, http.exchange("/api/budgets/" + budget.id(), HttpMethod.DELETE,
+                authorized(otherUserToken), String.class).getStatusCode());
+
+        CategoryDtos.Response budgetOnlyCategory = exchange("/api/categories", HttpMethod.POST,
+                new CategoryDtos.Request("Categoria com orçamento", CategoryType.EXPENSE), token,
+                CategoryDtos.Response.class).getBody();
+        BudgetDtos.Response standaloneBudget = exchange("/api/budgets", HttpMethod.POST,
+                new BudgetDtos.Request(budgetOnlyCategory.id(), monthValue, new BigDecimal("25.00")),
+                token, BudgetDtos.Response.class).getBody();
+        ResponseEntity<String> categoryDeleteWhileBudgeted = http.exchange("/api/categories/" + budgetOnlyCategory.id(),
+                HttpMethod.DELETE, authorized(token), String.class);
+        assertEquals(HttpStatus.CONFLICT, categoryDeleteWhileBudgeted.getStatusCode());
+        ResponseEntity<String> categoryTypeChangeWhileBudgeted = http.exchange(
+                "/api/categories/" + budgetOnlyCategory.id(), HttpMethod.PUT,
+                new HttpEntity<>(new CategoryDtos.Request("Categoria com orçamento", CategoryType.INCOME),
+                        authorized(token).getHeaders()), String.class);
+        assertEquals(HttpStatus.CONFLICT, categoryTypeChangeWhileBudgeted.getStatusCode());
+
+        assertEquals(HttpStatus.NO_CONTENT, http.exchange("/api/budgets/" + standaloneBudget.id(), HttpMethod.DELETE,
+                authorized(token), String.class).getStatusCode());
+        assertEquals(HttpStatus.NO_CONTENT, http.exchange("/api/categories/" + budgetOnlyCategory.id(),
+                HttpMethod.DELETE, authorized(token), String.class).getStatusCode());
+        assertEquals(HttpStatus.NO_CONTENT, http.exchange("/api/budgets/" + budget.id(), HttpMethod.DELETE,
+                authorized(token), String.class).getStatusCode());
     }
 
     private <T> ResponseEntity<T> exchange(String path, HttpMethod method, Object body, String token,
