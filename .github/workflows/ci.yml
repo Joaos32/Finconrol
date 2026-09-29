@@ -41,3 +41,85 @@ jobs:
       - name: Build frontend
         run: npm run build
         working-directory: frontend
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: fincontrol
+          POSTGRES_USER: fincontrol
+          POSTGRES_PASSWORD: fincontrol-e2e-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fincontrol -d fincontrol"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/fincontrol
+      DATABASE_USERNAME: fincontrol
+      DATABASE_PASSWORD: fincontrol-e2e-password
+      JWT_SECRET: fincontrol-e2e-secret-only-for-tests-32-bytes
+      JWT_EXPIRATION: PT15M
+      CORS_ALLOWED_ORIGINS: http://127.0.0.1:4200
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.15.0'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Run full-stack browser acceptance
+        run: |
+          set -Eeuo pipefail
+          mvn --batch-mode --no-transfer-progress -f backend/pom.xml spring-boot:run > "$RUNNER_TEMP/fincontrol-backend.log" 2>&1 &
+          backend_pid=$!
+          npm --prefix frontend start -- --host 127.0.0.1 > "$RUNNER_TEMP/fincontrol-frontend.log" 2>&1 &
+          frontend_pid=$!
+          cleanup() {
+            kill "$backend_pid" "$frontend_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          backend_ready=false
+          for attempt in {1..90}; do
+            if curl --fail --silent http://127.0.0.1:8080/actuator/health >/dev/null; then
+              backend_ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [[ "$backend_ready" != true ]]; then
+            cat "$RUNNER_TEMP/fincontrol-backend.log"
+            exit 1
+          fi
+
+          frontend_ready=false
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:4200/login >/dev/null; then
+              frontend_ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [[ "$frontend_ready" != true ]]; then
+            cat "$RUNNER_TEMP/fincontrol-frontend.log"
+            exit 1
+          fi
+
+          npm --prefix frontend run e2e

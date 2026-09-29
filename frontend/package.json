@@ -8,11 +8,12 @@
   "scripts": {
     "start": "ng serve --proxy-config proxy.conf.json",
     "build": "ng build",
-    "build:dev": "ng build --configuration development"
+    "build:dev": "ng build --configuration development",
+    "e2e": "playwright test"
   },
   "dependencies": {
-    "@angular/cdk": "22.2.0",
     "@angular/animations": "22.2.0",
+    "@angular/cdk": "22.2.0",
     "@angular/common": "22.2.0",
     "@angular/compiler": "22.2.0",
     "@angular/core": "22.2.0",
@@ -28,6 +29,7 @@
     "@angular/build": "22.2.0",
     "@angular/cli": "22.2.0",
     "@angular/compiler-cli": "22.2.0",
+    "@playwright/test": "^1.63.0",
     "sass": "^1.89.0",
     "typescript": "~6.0.0"
   }

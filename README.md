@@ -57,6 +57,8 @@ As rotas financeiras exigem Authorization: Bearer <token>. O backend obtém a id
 
 ## Testes
 
+Em `frontend/`, execute `npm ci`, `npm audit` e `npm run build`. O aceite de navegador usa Playwright: instale o Chromium com `npx playwright install chromium` e execute `npm run e2e` com a API em `http://localhost:8080` e o Angular em `http://localhost:4200`. O GitHub Actions sobe PostgreSQL e os dois aplicativos para executar esse fluxo completo.
+
 Em backend/, execute mvn test. Testes de integração PostgreSQL usam Testcontainers e são ignorados automaticamente quando o Docker não está disponível.
 
 ## Roadmap
