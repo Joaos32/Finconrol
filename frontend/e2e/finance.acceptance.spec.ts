@@ -107,6 +107,7 @@ test('registers, logs in and completes the finance flow through Angular', async 
   await budgetCard.getByRole('button', { name: 'Excluir orçamento de Mercado E2E' }).click();
   await expect(budgetCard).toHaveCount(0);
 
+  await page.getByRole('link', { name: /Transações/ }).click();
   await page.getByRole('button', { name: 'Limpar' }).click();
   page.once('dialog', (dialog) => dialog.accept());
   await updatedExpenseRow.getByRole('button', { name: 'Excluir transação' }).click();
