@@ -40,7 +40,7 @@ import { Category, CategoryType } from '../../core/models/finance.models';
           <div class="panel-heading"><div><span class="category-heading-icon income-heading-icon">↗</span><h2>Receitas</h2><p>Entradas organizadas por origem</p></div><span class="count-badge">{{ incomeCategories().length }}</span></div>
           @if (incomeCategories().length) {
             <div class="category-list">@for (category of incomeCategories(); track category.id) {
-              <div class="category-list-item"><span class="category-bullet income-bullet"></span><strong>{{ category.name }}</strong><span class="category-item-actions"><button class="icon-button" type="button" (click)="edit(category)">Editar</button><button class="icon-button icon-danger" type="button" (click)="remove(category)">Excluir</button></span></div>
+              <div class="category-list-item"><span class="category-bullet income-bullet"></span><strong>{{ category.name }}</strong><span class="category-item-actions"><button class="icon-button" type="button" [attr.aria-label]="'Editar categoria ' + category.name" (click)="edit(category)">Editar</button><button class="icon-button icon-danger" type="button" [attr.aria-label]="'Excluir categoria ' + category.name" (click)="remove(category)">Excluir</button></span></div>
             }</div>
           } @else { <p class="category-empty">Nenhuma categoria de receita.</p> }
         </section>
@@ -48,7 +48,7 @@ import { Category, CategoryType } from '../../core/models/finance.models';
           <div class="panel-heading"><div><span class="category-heading-icon expense-heading-icon">↘</span><h2>Despesas</h2><p>Saídas organizadas por destino</p></div><span class="count-badge">{{ expenseCategories().length }}</span></div>
           @if (expenseCategories().length) {
             <div class="category-list">@for (category of expenseCategories(); track category.id) {
-              <div class="category-list-item"><span class="category-bullet expense-bullet"></span><strong>{{ category.name }}</strong><span class="category-item-actions"><button class="icon-button" type="button" (click)="edit(category)">Editar</button><button class="icon-button icon-danger" type="button" (click)="remove(category)">Excluir</button></span></div>
+              <div class="category-list-item"><span class="category-bullet expense-bullet"></span><strong>{{ category.name }}</strong><span class="category-item-actions"><button class="icon-button" type="button" [attr.aria-label]="'Editar categoria ' + category.name" (click)="edit(category)">Editar</button><button class="icon-button icon-danger" type="button" [attr.aria-label]="'Excluir categoria ' + category.name" (click)="remove(category)">Excluir</button></span></div>
             }</div>
           } @else { <p class="category-empty">Nenhuma categoria de despesa.</p> }
         </section>
