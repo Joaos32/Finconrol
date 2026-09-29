@@ -8,6 +8,7 @@ import com.fincontrol.category.entity.CategoryType;
 import com.fincontrol.category.repository.CategoryRepository;
 import com.fincontrol.shared.error.ApiException;
 import com.fincontrol.transaction.dto.TransactionDtos;
+import com.fincontrol.transaction.entity.TransactionEntity;
 import com.fincontrol.transaction.entity.TransactionType;
 import com.fincontrol.transaction.mapper.TransactionMapper;
 import com.fincontrol.transaction.repository.TransactionRepository;
@@ -15,9 +16,11 @@ import com.fincontrol.user.repository.UserRepository;
 import com.fincontrol.user.entity.UserEntity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -72,7 +75,7 @@ class TransactionServiceTest {
 
     @Test
     void doesNotReturnTransactionOutsideAuthenticatedUsersScope() {
-        when(transactions.findOne(any())).thenReturn(Optional.empty());
+        when(transactions.findOne(ArgumentMatchers.<Specification<TransactionEntity>>any())).thenReturn(Optional.empty());
 
         ApiException exception = assertThrows(ApiException.class, () -> service.get(userId, UUID.randomUUID()));
 
