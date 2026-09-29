@@ -1,6 +1,5 @@
 package com.fincontrol.shared.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fincontrol.shared.error.ApiError;
 import com.fincontrol.user.repository.UserRepository;
 import com.fincontrol.user.security.AppUserPrincipal;
@@ -34,6 +33,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.io.IOException;
@@ -46,7 +46,7 @@ import java.util.List;
 @EnableMethodSecurity
 public class SecurityConfig {
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper,
+    SecurityFilterChain securityFilterChain(HttpSecurity http, JsonMapper objectMapper,
                                              @Value("${fincontrol.swagger.enabled:false}") boolean swaggerEnabled) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
@@ -90,7 +90,7 @@ public class SecurityConfig {
         return new SecretKeySpec(secret, "HmacSHA256");
     }
 
-    private void writeError(ObjectMapper objectMapper, HttpServletRequest request, HttpServletResponse response,
+    private void writeError(JsonMapper objectMapper, HttpServletRequest request, HttpServletResponse response,
                             HttpStatus status, String message) throws IOException {
         response.setStatus(status.value());
         response.setContentType("application/json");
