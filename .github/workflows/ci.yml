@@ -122,4 +122,10 @@ jobs:
             exit 1
           fi
 
-          npm --prefix frontend run e2e
+          if npm --prefix frontend run e2e; then
+            true
+          else
+            cat "$RUNNER_TEMP/fincontrol-backend.log"
+            cat "$RUNNER_TEMP/fincontrol-frontend.log"
+            exit 1
+          fi

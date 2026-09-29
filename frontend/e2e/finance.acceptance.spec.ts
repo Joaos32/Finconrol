@@ -4,9 +4,19 @@ test('registers, logs in and completes the finance flow through Angular', async 
   test.setTimeout(60_000);
   const email = `e2e-${Date.now()}@example.com`;
   const password = 'SenhaSegura123!';
+  page.on('pageerror', (error) => console.log(`[browser page error] ${error.message}`));
+  page.on('console', (message) => {
+    if (message.type() === 'error') console.log(`[browser console error] ${message.text()}`);
+  });
 
   await page.goto('/login');
-  await expect(page.getByRole('heading', { name: 'Entre na sua conta' })).toBeVisible();
+  try {
+    await expect(page.getByRole('heading', { name: 'Entre na sua conta' })).toBeVisible();
+  } catch (error) {
+    console.log(`[login route diagnostic] URL: ${page.url()}`);
+    console.log(`[login route diagnostic] body: ${await page.locator('body').innerText()}`);
+    throw error;
+  }
   await page.getByRole('link', { name: 'Criar minha conta' }).click();
   await page.getByLabel('Nome').fill('Pessoa de Teste');
   await page.getByLabel('E-mail').fill(email);
