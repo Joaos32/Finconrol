@@ -18,7 +18,9 @@ import java.util.UUID;
 public interface TransactionRepository extends JpaRepository<TransactionEntity, UUID>,
         JpaSpecificationExecutor<TransactionEntity> {
     boolean existsByAccountIdAndUserId(UUID accountId, UUID userId);
+    boolean existsByCardIdAndUserId(UUID cardId, UUID userId);
     boolean existsByCategoryIdAndUserId(UUID categoryId, UUID userId);
+    long countByInvoiceIdAndUserId(UUID invoiceId, UUID userId);
 
     Page<TransactionEntity> findAllByUserIdOrderByTransactionDateDescCreatedAtDesc(UUID userId, Pageable pageable);
 

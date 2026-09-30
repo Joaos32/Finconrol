@@ -9,7 +9,7 @@ import { forkJoin } from 'rxjs';
 import { FinanceApiService } from '../../core/api/finance-api.service';
 import { apiErrorMessage } from '../../core/api/api-error';
 import {
-  Account, Category, Transaction, TransactionPage, TransactionType,
+  Account, Category, CreditCard, Transaction, TransactionPage, TransactionType,
 } from '../../core/models/finance.models';
 
 @Component({
@@ -30,7 +30,14 @@ import {
           <mat-form-field appearance="outline"><mat-label>Descrição</mat-label><input matInput formControlName="description" placeholder="Ex.: Mercado da semana"><mat-error>Informe uma descrição.</mat-error></mat-form-field>
           <mat-form-field appearance="outline"><mat-label>Tipo</mat-label><mat-select formControlName="type"><mat-option value="EXPENSE">Despesa</mat-option><mat-option value="INCOME">Receita</mat-option></mat-select></mat-form-field>
           <mat-form-field appearance="outline"><mat-label>Valor</mat-label><span matTextPrefix>R$&nbsp;</span><input matInput type="number" min="0.01" step="0.01" formControlName="amount"><mat-error>O valor deve ser maior que zero.</mat-error></mat-form-field>
-          <mat-form-field appearance="outline"><mat-label>Conta</mat-label><mat-select formControlName="accountId"><mat-option value="">Selecione uma conta</mat-option>@for (account of accounts(); track account.id) { <mat-option [value]="account.id">{{ account.name }}</mat-option> }</mat-select><mat-error>Selecione uma conta.</mat-error></mat-form-field>
+          @if (form.controls.type.value === 'EXPENSE') {
+            <mat-form-field appearance="outline"><mat-label>Origem da despesa</mat-label><mat-select formControlName="sourceType"><mat-option value="ACCOUNT">Conta</mat-option><mat-option value="CARD">Cartão de crédito</mat-option></mat-select></mat-form-field>
+          }
+          @if (form.controls.type.value === 'INCOME' || form.controls.sourceType.value === 'ACCOUNT') {
+            <mat-form-field appearance="outline"><mat-label>Conta</mat-label><mat-select formControlName="sourceId"><mat-option value="">Selecione uma conta</mat-option>@for (account of accounts(); track account.id) { <mat-option [value]="account.id">{{ account.name }}</mat-option> }</mat-select><mat-error>Selecione uma conta.</mat-error></mat-form-field>
+          } @else {
+            <mat-form-field appearance="outline"><mat-label>Cartão de crédito</mat-label><mat-select formControlName="sourceId"><mat-option value="">Selecione um cartão</mat-option>@for (card of cards(); track card.id) { <mat-option [value]="card.id">{{ card.name }}</mat-option> }</mat-select><mat-error>Selecione um cartão.</mat-error></mat-form-field>
+          }
           <mat-form-field appearance="outline"><mat-label>Categoria</mat-label><mat-select formControlName="categoryId"><mat-option value="">Selecione uma categoria</mat-option>@for (category of filteredCategories(); track category.id) { <mat-option [value]="category.id">{{ category.name }}</mat-option> }</mat-select><mat-error>Selecione uma categoria compatível.</mat-error></mat-form-field>
           <mat-form-field appearance="outline"><mat-label>Data</mat-label><input matInput type="date" formControlName="transactionDate"><mat-error>Informe a data.</mat-error></mat-form-field>
           <div class="form-actions"><button class="button button-quiet" type="button" (click)="closeForm()">Cancelar</button><button class="button button-primary" type="submit" [disabled]="saving()">{{ saving() ? 'Salvando…' : 'Salvar transação' }}</button></div>
@@ -58,12 +65,12 @@ import {
         <div class="list-skeleton">@for (item of [1,2,3,4,5]; track item) { <div></div> }</div>
       } @else if (page()?.content?.length) {
         <div class="table-wrap"><table class="data-table">
-          <thead><tr><th>DESCRIÇÃO</th><th>CATEGORIA</th><th>CONTA</th><th>DATA</th><th>TIPO</th><th class="align-right">VALOR</th><th></th></tr></thead>
+          <thead><tr><th>DESCRIÇÃO</th><th>CATEGORIA</th><th>ORIGEM</th><th>DATA</th><th>TIPO</th><th class="align-right">VALOR</th><th></th></tr></thead>
           <tbody>@for (item of page()!.content; track item.id) {
             <tr>
               <td><div class="transaction-name"><span class="transaction-symbol" [class.symbol-income]="item.type === 'INCOME'">{{ item.type === 'INCOME' ? '↗' : '↘' }}</span><strong>{{ item.description }}</strong></div></td>
               <td><span class="table-secondary">{{ item.categoryName }}</span></td>
-              <td><span class="table-secondary">{{ item.accountName }}</span></td>
+              <td><span class="table-secondary">{{ item.accountName || item.cardName || '—' }}</span></td>
               <td><span class="table-secondary">{{ formatDate(item.transactionDate) }}</span></td>
               <td><span class="type-pill" [class.type-income]="item.type === 'INCOME'">{{ item.type === 'INCOME' ? 'Receita' : 'Despesa' }}</span></td>
               <td class="align-right" [class.income-text]="item.type === 'INCOME'"><strong>{{ item.type === 'INCOME' ? '+' : '−' }} {{ item.amount | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</strong></td>
@@ -83,6 +90,7 @@ import {
 })
 export class TransactionsComponent implements OnInit {
   readonly accounts = signal<Account[]>([]);
+  readonly cards = signal<CreditCard[]>([]);
   readonly categories = signal<Category[]>([]);
   readonly page = signal<TransactionPage | null>(null);
   readonly loading = signal(true);
@@ -95,7 +103,8 @@ export class TransactionsComponent implements OnInit {
     description: ['', [Validators.required, Validators.maxLength(180)]],
     amount: [0, [Validators.required, Validators.min(0.01)]],
     type: ['EXPENSE' as TransactionType, Validators.required],
-    accountId: ['', Validators.required],
+    sourceType: ['ACCOUNT' as 'ACCOUNT' | 'CARD', Validators.required],
+    sourceId: ['', Validators.required],
     categoryId: ['', Validators.required],
     transactionDate: [this.today(), Validators.required],
   });
@@ -110,10 +119,16 @@ export class TransactionsComponent implements OnInit {
   constructor(private readonly formBuilder: FormBuilder, private readonly api: FinanceApiService) {}
 
   ngOnInit(): void {
-    this.form.controls.type.valueChanges.subscribe(() => this.form.controls.categoryId.setValue(''));
-    forkJoin({ accounts: this.api.accounts(), categories: this.api.categories() }).subscribe({
+    this.form.controls.type.valueChanges.subscribe((type) => {
+      this.form.controls.categoryId.setValue('');
+      this.form.controls.sourceId.setValue('');
+      if (type === 'INCOME') this.form.controls.sourceType.setValue('ACCOUNT');
+    });
+    this.form.controls.sourceType.valueChanges.subscribe(() => this.form.controls.sourceId.setValue(''));
+    forkJoin({ accounts: this.api.accounts(), cards: this.api.creditCards(), categories: this.api.categories() }).subscribe({
       next: (data) => {
         this.accounts.set(data.accounts);
+        this.cards.set(data.cards);
         this.categories.set(data.categories);
         this.loadPage(0);
       },
@@ -130,7 +145,7 @@ export class TransactionsComponent implements OnInit {
 
   openCreate(): void {
     this.editingId.set(null);
-    this.form.reset({ description: '', amount: 0, type: 'EXPENSE', accountId: '', categoryId: '', transactionDate: this.today() });
+    this.form.reset({ description: '', amount: 0, type: 'EXPENSE', sourceType: 'ACCOUNT', sourceId: '', categoryId: '', transactionDate: this.today() });
     this.formOpen.set(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -139,7 +154,9 @@ export class TransactionsComponent implements OnInit {
     this.editingId.set(transaction.id);
     this.form.reset({
       description: transaction.description, amount: transaction.amount, type: transaction.type,
-      accountId: transaction.accountId, categoryId: transaction.categoryId, transactionDate: transaction.transactionDate,
+      sourceType: transaction.cardId ? 'CARD' : 'ACCOUNT',
+      sourceId: transaction.cardId ?? transaction.accountId ?? '',
+      categoryId: transaction.categoryId, transactionDate: transaction.transactionDate,
     });
     this.formOpen.set(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -150,8 +167,25 @@ export class TransactionsComponent implements OnInit {
   save(): void {
     this.notice.set('');
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+    const values = this.form.getRawValue();
+    if (values.type === 'INCOME' && values.sourceType !== 'ACCOUNT') {
+      this.showNotice('Receitas devem estar vinculadas a uma conta.', true);
+      return;
+    }
+    if (!values.sourceId) {
+      this.form.controls.sourceId.markAsTouched();
+      return;
+    }
     this.saving.set(true);
-    this.api.saveTransaction(this.form.getRawValue(), this.editingId() ?? undefined).subscribe({
+    this.api.saveTransaction({
+      description: values.description,
+      amount: Number(values.amount),
+      type: values.type,
+      accountId: values.sourceType === 'ACCOUNT' ? values.sourceId : null,
+      cardId: values.sourceType === 'CARD' ? values.sourceId : null,
+      categoryId: values.categoryId,
+      transactionDate: values.transactionDate,
+    }, this.editingId() ?? undefined).subscribe({
       next: () => {
         this.saving.set(false);
         this.closeForm();

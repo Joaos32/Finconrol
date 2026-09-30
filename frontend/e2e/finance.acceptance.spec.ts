@@ -65,9 +65,47 @@ test('registers, logs in and completes the finance flow through Angular', async 
   await expect(budgetCard).toContainText('4,50');
   await expect(budgetCard).toContainText('88,8%');
 
+  await page.getByRole('link', { name: /Contas/ }).click();
+  await page.getByRole('button', { name: /Nova conta/ }).click();
+  await page.getByLabel('Nome da conta').fill('Conta fatura E2E');
+  await page.getByLabel('Saldo inicial').fill('50');
+  await page.getByRole('button', { name: 'Salvar conta' }).click();
+  await expect(page.getByRole('row', { name: /Conta fatura E2E/ })).toContainText('50,00');
+
+  await page.getByRole('link', { name: /Categorias/ }).click();
+  await createCategory(page, 'Crédito E2E', 'Despesa');
+  await page.getByRole('link', { name: /Cartões/ }).click();
+  await page.getByRole('button', { name: /Novo cartão/ }).click();
+  await page.getByLabel('Nome do cartão').fill('Cartão E2E');
+  await page.getByLabel('Limite de crédito').fill('500');
+  await page.getByLabel('Dia de fechamento').fill('28');
+  await page.getByLabel('Dia de vencimento').fill('5');
+  await page.getByRole('button', { name: 'Salvar cartão' }).click();
+  await expect(page.getByRole('row', { name: /Cartão E2E/ })).toBeVisible();
+
+  await page.getByRole('link', { name: /Transações/ }).click();
+  await createTransaction(page, {
+    description: 'Compra no cartão E2E', amount: '12.25', type: 'Despesa', card: 'Cartão E2E', category: 'Crédito E2E',
+  });
+  await page.getByRole('link', { name: /Orçamentos/ }).click();
+  await createBudget(page, 'Crédito E2E', currentMonth(), '20');
+  const cardBudget = page.locator('.budget-card').filter({ hasText: 'Crédito E2E' });
+  await expect(cardBudget).toContainText('12,25');
+
+  await page.getByRole('link', { name: /Cartões/ }).click();
+  await page.getByLabel('Mês da fatura').fill(invoiceMonthForPurchase(currentMonth(), new Date().getDate(), 28));
+  await expect(page.getByText('12,25')).toBeVisible();
+  await page.getByLabel('Conta para pagamento').click();
+  await page.getByRole('option', { name: 'Conta fatura E2E' }).click();
+  await page.getByRole('button', { name: 'Quitar fatura integral' }).click();
+  await expect(page.getByText('Fatura quitada com sucesso.')).toBeVisible();
+  await expect(page.getByText('Paga', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: /Contas/ }).click();
+  await expect(page.getByRole('row', { name: /Conta fatura E2E/ })).toContainText('37,75');
+
   await page.getByRole('link', { name: 'Dashboard' }).click();
   await expect(page.getByRole('heading', { name: 'Seu dinheiro, com clareza.' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Resumo financeiro' })).toContainText('264,50');
+  await expect(page.getByRole('region', { name: 'Resumo financeiro' })).toContainText('302,25');
   await expect(page.getByRole('row', { name: /Compra E2E/ })).toBeVisible();
 
   await page.getByRole('button', { name: /Sair da aplicação/ }).click();
@@ -168,7 +206,8 @@ async function createTransaction(page: Page, data: {
   description: string;
   amount: string;
   type: 'Receita' | 'Despesa';
-  account: string;
+  account?: string;
+  card?: string;
   category: string;
 }): Promise<void> {
   await page.getByRole('button', { name: /Nova transação/ }).click();
@@ -178,10 +217,24 @@ async function createTransaction(page: Page, data: {
     await page.getByRole('option', { name: 'Receita' }).click();
   }
   await page.getByLabel('Valor').fill(data.amount);
-  await page.getByLabel('Conta').first().click();
-  await page.getByRole('option', { name: data.account }).click();
+  if (data.card) {
+    await page.getByLabel('Origem da despesa').click();
+    await page.getByRole('option', { name: 'Cartão de crédito' }).click();
+    await page.getByLabel('Cartão de crédito').click();
+    await page.getByRole('option', { name: data.card }).click();
+  } else {
+    await page.getByLabel('Conta').first().click();
+    await page.getByRole('option', { name: data.account! }).click();
+  }
   await page.getByLabel('Categoria').first().click();
   await page.getByRole('option', { name: data.category }).click();
   await page.getByRole('button', { name: 'Salvar transação' }).click();
   await expect(page.getByRole('row', { name: new RegExp(data.description) })).toBeVisible();
+}
+
+function invoiceMonthForPurchase(month: string, day: number, closingDay: number): string {
+  if (day <= closingDay) return month;
+  const [year, monthNumber] = month.split('-').map(Number);
+  const next = new Date(year, monthNumber, 1);
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
 }

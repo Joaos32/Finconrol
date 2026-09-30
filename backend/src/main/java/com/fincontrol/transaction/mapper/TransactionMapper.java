@@ -9,6 +9,8 @@ import org.mapstruct.Mapping;
 public interface TransactionMapper {
     @Mapping(source = "account.id", target = "accountId")
     @Mapping(source = "account.name", target = "accountName")
+    @Mapping(source = "card.id", target = "cardId")
+    @Mapping(source = "card.name", target = "cardName")
     @Mapping(source = "category.id", target = "categoryId")
     @Mapping(source = "category.name", target = "categoryName")
     TransactionDtos.Response toResponse(TransactionEntity entity);

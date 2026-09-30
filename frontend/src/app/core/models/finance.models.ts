@@ -40,8 +40,10 @@ export interface Transaction {
   description: string;
   amount: number;
   type: TransactionType;
-  accountId: string;
-  accountName: string;
+  accountId: string | null;
+  accountName: string | null;
+  cardId: string | null;
+  cardName: string | null;
   categoryId: string;
   categoryName: string;
   transactionDate: string;
@@ -53,7 +55,8 @@ export interface TransactionRequest {
   description: string;
   amount: number;
   type: TransactionType;
-  accountId: string;
+  accountId: string | null;
+  cardId: string | null;
   categoryId: string;
   transactionDate: string;
 }
@@ -76,6 +79,40 @@ export interface TransactionFilters {
   accountId?: string;
   page?: number;
   size?: number;
+}
+
+export interface CreditCard {
+  id: string;
+  name: string;
+  creditLimit: number;
+  closingDay: number;
+  dueDay: number;
+  outstandingAmount: number;
+  availableLimit: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreditCardRequest {
+  name: string;
+  creditLimit: number;
+  closingDay: number;
+  dueDay: number;
+}
+
+export interface CreditCardInvoice {
+  id: string | null;
+  cardId: string;
+  cardName: string;
+  month: string;
+  periodStart: string;
+  closingDate: string;
+  dueDate: string;
+  totalAmount: number;
+  paid: boolean;
+  paidAt: string | null;
+  paymentAccountId: string | null;
+  paymentAccountName: string | null;
 }
 
 export interface DashboardSummary {

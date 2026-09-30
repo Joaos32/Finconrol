@@ -38,6 +38,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/budgets/budgets.component').then((m) => m.BudgetsComponent),
         title: 'Orçamentos · FinControl',
       },
+      {
+        path: 'credit-cards',
+        loadComponent: () => import('./features/credit-cards/credit-cards.component').then((m) => m.CreditCardsComponent),
+        title: 'Cartões · FinControl',
+      },
     ],
   },
   { path: '**', redirectTo: 'dashboard' },

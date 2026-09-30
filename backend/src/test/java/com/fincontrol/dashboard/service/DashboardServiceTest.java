@@ -1,6 +1,7 @@
 package com.fincontrol.dashboard.service;
 
 import com.fincontrol.account.repository.AccountRepository;
+import com.fincontrol.account.repository.AccountBalanceProjection;
 import com.fincontrol.transaction.entity.TransactionType;
 import com.fincontrol.transaction.repository.TransactionRepository;
 import com.fincontrol.transaction.service.TransactionService;
@@ -12,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.*;
@@ -25,15 +27,15 @@ class DashboardServiceTest {
     @InjectMocks private DashboardService service;
 
     @Test
-    void calculatesLifetimeBalanceAndMonthlyResultFromAggregates() {
+    void calculatesCashBalanceAndMonthlyResultFromAggregates() {
         UUID userId = UUID.randomUUID();
         when(transactions.sumByUserAndTypeForPeriod(eq(userId), eq(TransactionType.INCOME), any(), any()))
                 .thenReturn(new BigDecimal("2100.00"));
         when(transactions.sumByUserAndTypeForPeriod(eq(userId), eq(TransactionType.EXPENSE), any(), any()))
                 .thenReturn(new BigDecimal("800.00"));
-        when(transactions.sumByUserAndType(userId, TransactionType.INCOME)).thenReturn(new BigDecimal("6000.00"));
-        when(transactions.sumByUserAndType(userId, TransactionType.EXPENSE)).thenReturn(new BigDecimal("1900.00"));
-        when(accounts.sumInitialBalancesByUserId(userId)).thenReturn(new BigDecimal("4500.00"));
+        AccountBalanceProjection balance = org.mockito.Mockito.mock(AccountBalanceProjection.class);
+        when(balance.getCurrentBalance()).thenReturn(new BigDecimal("8600.00"));
+        when(accounts.findBalancesByUserId(userId)).thenReturn(List.of(balance));
 
         var summary = service.summary(userId);
 

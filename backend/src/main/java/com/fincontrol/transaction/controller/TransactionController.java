@@ -44,9 +44,10 @@ public class TransactionController {
             @RequestParam(required = false) TransactionType type,
             @RequestParam(required = false) UUID categoryId,
             @RequestParam(required = false) UUID accountId,
+            @RequestParam(required = false) UUID cardId,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return service.list(currentUser.id(), startDate, endDate, type, categoryId, accountId, page, size);
+        return service.list(currentUser.id(), startDate, endDate, type, categoryId, accountId, cardId, page, size);
     }
 
     @GetMapping("/{id}")

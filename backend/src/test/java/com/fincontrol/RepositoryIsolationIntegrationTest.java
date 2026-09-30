@@ -7,6 +7,12 @@ import com.fincontrol.account.repository.AccountRepository;
 import com.fincontrol.category.entity.CategoryEntity;
 import com.fincontrol.category.entity.CategoryType;
 import com.fincontrol.category.repository.CategoryRepository;
+import com.fincontrol.creditcard.entity.CreditCardEntity;
+import com.fincontrol.creditcard.entity.CreditCardInvoiceEntity;
+import com.fincontrol.creditcard.entity.CreditCardInvoicePaymentEntity;
+import com.fincontrol.creditcard.repository.CreditCardInvoicePaymentRepository;
+import com.fincontrol.creditcard.repository.CreditCardInvoiceRepository;
+import com.fincontrol.creditcard.repository.CreditCardRepository;
 import com.fincontrol.transaction.entity.TransactionEntity;
 import com.fincontrol.transaction.entity.TransactionType;
 import com.fincontrol.transaction.repository.TransactionRepository;
@@ -51,6 +57,9 @@ class RepositoryIsolationIntegrationTest {
     @Autowired private AccountRepository accounts;
     @Autowired private CategoryRepository categories;
     @Autowired private TransactionRepository transactions;
+    @Autowired private CreditCardRepository creditCards;
+    @Autowired private CreditCardInvoiceRepository invoices;
+    @Autowired private CreditCardInvoicePaymentRepository invoicePayments;
 
     @Test
     @Transactional
@@ -64,11 +73,18 @@ class RepositoryIsolationIntegrationTest {
                 TransactionType.INCOME, LocalDate.of(2026, 9, 1)));
         transactions.save(new TransactionEntity(user, account, expense, "Compra", new BigDecimal("20.00"),
                 TransactionType.EXPENSE, LocalDate.of(2026, 9, 2)));
+        CreditCardEntity card = creditCards.save(new CreditCardEntity(user, "CartÃ£o", new BigDecimal("1000.00"), 20, 5));
+        CreditCardInvoiceEntity invoice = invoices.save(new CreditCardInvoiceEntity(card, user,
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 8, 21), LocalDate.of(2026, 9, 20),
+                LocalDate.of(2026, 10, 5)));
+        transactions.save(new TransactionEntity(user, null, card, invoice, expense, "Compra no cartÃ£o",
+                new BigDecimal("40.00"), TransactionType.EXPENSE, LocalDate.of(2026, 9, 3)));
+        invoicePayments.save(new CreditCardInvoicePaymentEntity(invoice, card, user, account, new BigDecimal("40.00")));
 
         AccountBalanceProjection result = accounts.findBalancesByUserId(user.getId()).getFirst();
 
         assertEquals(account.getId(), result.getAccountId());
-        assertEquals(new BigDecimal("130.00"), result.getCurrentBalance());
+        assertEquals(new BigDecimal("90.00"), result.getCurrentBalance());
         assertTrue(users.findByEmailIgnoreCase("db-test@example.com").isPresent());
     }
 }

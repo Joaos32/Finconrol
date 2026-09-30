@@ -6,6 +6,7 @@ import com.fincontrol.auth.dto.AuthDtos;
 import com.fincontrol.budget.dto.BudgetDtos;
 import com.fincontrol.category.dto.CategoryDtos;
 import com.fincontrol.category.entity.CategoryType;
+import com.fincontrol.creditcard.dto.CreditCardDtos;
 import com.fincontrol.dashboard.dto.DashboardDtos;
 import com.fincontrol.transaction.dto.TransactionDtos;
 import com.fincontrol.transaction.entity.TransactionType;
@@ -38,6 +39,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Testcontainers(disabledWithoutDocker = true)
@@ -72,6 +74,150 @@ class FinancialApiAcceptanceTest {
         assertNotNull(documentation.getBody());
         assertTrue(documentation.getBody().contains("/api/transactions"));
         assertTrue(documentation.getBody().contains("/api/budgets"));
+        assertTrue(documentation.getBody().contains("/api/credit-cards"));
+    }
+
+    @Test
+    void recordsCardPurchasesOnceAndPaymentOnlyReducesCashBalance() {
+        String email = "card-acceptance-" + UUID.randomUUID() + "@example.com";
+        AuthDtos.AuthResponse registration = http.postForEntity("/api/auth/register",
+                new AuthDtos.RegisterRequest("Pessoa CartÃ£o", email, "SenhaSegura123!"),
+                AuthDtos.AuthResponse.class).getBody();
+        assertNotNull(registration);
+        String token = registration.accessToken();
+
+        AccountDtos.Response account = exchange("/api/accounts", HttpMethod.POST,
+                new AccountDtos.Request("Conta para fatura", AccountType.CHECKING, new BigDecimal("100.00")),
+                token, AccountDtos.Response.class).getBody();
+        CategoryDtos.Response expenseCategory = exchange("/api/categories", HttpMethod.POST,
+                new CategoryDtos.Request("Compras no crÃ©dito", CategoryType.EXPENSE), token,
+                CategoryDtos.Response.class).getBody();
+        CreditCardDtos.Response card = exchange("/api/credit-cards", HttpMethod.POST,
+                new CreditCardDtos.Request("CartÃ£o principal", new BigDecimal("500.00"), 20, 5),
+                token, CreditCardDtos.Response.class).getBody();
+        assertNotNull(account);
+        assertNotNull(expenseCategory);
+        assertNotNull(card);
+
+        CreditCardDtos.InvoiceResponse emptyInvoice = exchange(
+                "/api/credit-cards/" + card.id() + "/invoices?month=2026-06", HttpMethod.GET,
+                null, token, CreditCardDtos.InvoiceResponse.class).getBody();
+        assertNotNull(emptyInvoice);
+        assertNull(emptyInvoice.id());
+        assertEquals(BigDecimal.ZERO.setScale(2), emptyInvoice.totalAmount());
+
+        LocalDate purchaseDate = LocalDate.of(2026, 6, 20);
+        ResponseEntity<TransactionDtos.Response> purchaseResponse = exchange("/api/transactions", HttpMethod.POST,
+                new TransactionDtos.Request("Compra no crÃ©dito", new BigDecimal("60.00"), TransactionType.EXPENSE,
+                        null, card.id(), expenseCategory.id(), purchaseDate), token, TransactionDtos.Response.class);
+        assertEquals(HttpStatus.CREATED, purchaseResponse.getStatusCode());
+        assertNull(purchaseResponse.getBody().accountId());
+        assertEquals(card.id(), purchaseResponse.getBody().cardId());
+
+        CreditCardDtos.InvoiceResponse invoice = exchange(
+                "/api/credit-cards/" + card.id() + "/invoices?month=2026-06", HttpMethod.GET,
+                null, token, CreditCardDtos.InvoiceResponse.class).getBody();
+        assertNotNull(invoice.id());
+        assertEquals(new BigDecimal("60.00"), invoice.totalAmount());
+        assertEquals(LocalDate.of(2026, 5, 21), invoice.periodStart());
+        assertEquals(LocalDate.of(2026, 6, 20), invoice.closingDate());
+        assertEquals(LocalDate.of(2026, 7, 5), invoice.dueDate());
+
+        ResponseEntity<String> changeClosingWithOpenInvoice = http.exchange("/api/credit-cards/" + card.id(),
+                HttpMethod.PUT, new HttpEntity<>(new CreditCardDtos.Request("CartÃ£o principal",
+                        new BigDecimal("500.00"), 21, 5), authorized(token).getHeaders()), String.class);
+        assertEquals(HttpStatus.CONFLICT, changeClosingWithOpenInvoice.getStatusCode());
+
+        BudgetDtos.Response budget = exchange("/api/budgets", HttpMethod.POST,
+                new BudgetDtos.Request(expenseCategory.id(), "2026-06", new BigDecimal("70.00")),
+                token, BudgetDtos.Response.class).getBody();
+        assertEquals(new BigDecimal("60.00"), budget.spentAmount());
+        ResponseEntity<List<CreditCardDtos.Response>> cardBeforePayment = http.exchange("/api/credit-cards", HttpMethod.GET,
+                authorized(token), new ParameterizedTypeReference<>() { });
+        assertEquals(new BigDecimal("60.00"), cardBeforePayment.getBody().getFirst().outstandingAmount());
+        assertEquals(new BigDecimal("440.00"), cardBeforePayment.getBody().getFirst().availableLimit());
+
+        AccountDtos.Response balanceBeforePayment = exchange("/api/accounts/" + account.id(), HttpMethod.GET,
+                null, token, AccountDtos.Response.class).getBody();
+        assertEquals(new BigDecimal("100.00"), balanceBeforePayment.currentBalance());
+
+        AuthDtos.AuthResponse otherUser = http.postForEntity("/api/auth/register",
+                new AuthDtos.RegisterRequest("Outra pessoa", "card-other-" + UUID.randomUUID() + "@example.com",
+                        "SenhaSegura123!"), AuthDtos.AuthResponse.class).getBody();
+        assertNotNull(otherUser);
+        AccountDtos.Response foreignAccount = exchange("/api/accounts", HttpMethod.POST,
+                new AccountDtos.Request("Conta de outra pessoa", AccountType.CHECKING, new BigDecimal("90.00")),
+                otherUser.accessToken(), AccountDtos.Response.class).getBody();
+        assertNotNull(foreignAccount);
+        ResponseEntity<String> foreignInvoice = http.exchange(
+                "/api/credit-cards/" + card.id() + "/invoices?month=2026-06", HttpMethod.GET,
+                authorized(otherUser.accessToken()), String.class);
+        assertEquals(HttpStatus.NOT_FOUND, foreignInvoice.getStatusCode());
+        ResponseEntity<String> foreignPaymentAccount = http.exchange(
+                "/api/credit-cards/" + card.id() + "/invoices/" + invoice.id() + "/payments", HttpMethod.POST,
+                new HttpEntity<>(new CreditCardDtos.PaymentRequest(foreignAccount.id()), authorized(token).getHeaders()),
+                String.class);
+        assertEquals(HttpStatus.NOT_FOUND, foreignPaymentAccount.getStatusCode());
+
+        CreditCardDtos.InvoiceResponse paid = exchange(
+                "/api/credit-cards/" + card.id() + "/invoices/" + invoice.id() + "/payments", HttpMethod.POST,
+                new CreditCardDtos.PaymentRequest(account.id()), token, CreditCardDtos.InvoiceResponse.class).getBody();
+        assertTrue(paid.paid());
+        assertEquals(account.id(), paid.paymentAccountId());
+        assertEquals(new BigDecimal("60.00"), paid.totalAmount());
+
+        AccountDtos.Response balanceAfterPayment = exchange("/api/accounts/" + account.id(), HttpMethod.GET,
+                null, token, AccountDtos.Response.class).getBody();
+        assertEquals(new BigDecimal("40.00"), balanceAfterPayment.currentBalance());
+        ResponseEntity<List<BudgetDtos.Response>> budgetAfterPayment = http.exchange("/api/budgets?month=2026-06",
+                HttpMethod.GET, authorized(token), new ParameterizedTypeReference<>() { });
+        assertEquals(new BigDecimal("60.00"), budgetAfterPayment.getBody().getFirst().spentAmount());
+        ResponseEntity<List<CreditCardDtos.Response>> listedCards = http.exchange("/api/credit-cards", HttpMethod.GET,
+                authorized(token), new ParameterizedTypeReference<>() { });
+        assertEquals(BigDecimal.ZERO.setScale(2), listedCards.getBody().getFirst().outstandingAmount());
+        assertEquals(new BigDecimal("500.00"), listedCards.getBody().getFirst().availableLimit());
+        ResponseEntity<String> changeClosingAfterPaidInvoice = http.exchange("/api/credit-cards/" + card.id(),
+                HttpMethod.PUT, new HttpEntity<>(new CreditCardDtos.Request("CartÃ£o principal",
+                        new BigDecimal("500.00"), 21, 5), authorized(token).getHeaders()), String.class);
+        assertEquals(HttpStatus.CONFLICT, changeClosingAfterPaidInvoice.getStatusCode());
+        CreditCardDtos.Response updatedCard = exchange("/api/credit-cards/" + card.id(), HttpMethod.PUT,
+                new CreditCardDtos.Request("CartÃ£o principal", new BigDecimal("500.00"), 20, 6),
+                token, CreditCardDtos.Response.class).getBody();
+        assertEquals(20, updatedCard.closingDay());
+        CreditCardDtos.InvoiceResponse historicalInvoice = exchange(
+                "/api/credit-cards/" + card.id() + "/invoices?month=2026-06", HttpMethod.GET,
+                null, token, CreditCardDtos.InvoiceResponse.class).getBody();
+        assertEquals(LocalDate.of(2026, 6, 20), historicalInvoice.closingDate());
+
+        ResponseEntity<String> duplicatePayment = http.exchange(
+                "/api/credit-cards/" + card.id() + "/invoices/" + invoice.id() + "/payments", HttpMethod.POST,
+                new HttpEntity<>(new CreditCardDtos.PaymentRequest(account.id()), authorized(token).getHeaders()), String.class);
+        assertEquals(HttpStatus.CONFLICT, duplicatePayment.getStatusCode());
+        ResponseEntity<String> editPaidPurchase = http.exchange("/api/transactions/" + purchaseResponse.getBody().id(),
+                HttpMethod.PUT, new HttpEntity<>(new TransactionDtos.Request("Compra alterada", new BigDecimal("60.00"),
+                        TransactionType.EXPENSE, null, card.id(), expenseCategory.id(), purchaseDate),
+                        authorized(token).getHeaders()), String.class);
+        assertEquals(HttpStatus.CONFLICT, editPaidPurchase.getStatusCode());
+        ResponseEntity<String> addToPaidInvoice = http.exchange("/api/transactions", HttpMethod.POST,
+                new HttpEntity<>(new TransactionDtos.Request("Compra retroativa", new BigDecimal("15.00"),
+                        TransactionType.EXPENSE, null, card.id(), expenseCategory.id(), purchaseDate),
+                        authorized(token).getHeaders()), String.class);
+        assertEquals(HttpStatus.CONFLICT, addToPaidInvoice.getStatusCode());
+        ResponseEntity<String> deletePaidPurchase = http.exchange("/api/transactions/" + purchaseResponse.getBody().id(),
+                HttpMethod.DELETE, authorized(token), String.class);
+        assertEquals(HttpStatus.CONFLICT, deletePaidPurchase.getStatusCode());
+
+        CreditCardDtos.Response temporaryCard = exchange("/api/credit-cards", HttpMethod.POST,
+                new CreditCardDtos.Request("CartÃ£o temporÃ¡rio", new BigDecimal("100.00"), 20, 5),
+                token, CreditCardDtos.Response.class).getBody();
+        TransactionDtos.Response temporaryPurchase = exchange("/api/transactions", HttpMethod.POST,
+                new TransactionDtos.Request("Compra removÃ­vel", new BigDecimal("5.00"), TransactionType.EXPENSE,
+                        null, temporaryCard.id(), expenseCategory.id(), LocalDate.of(2026, 7, 1)),
+                token, TransactionDtos.Response.class).getBody();
+        assertEquals(HttpStatus.NO_CONTENT, http.exchange("/api/transactions/" + temporaryPurchase.id(),
+                HttpMethod.DELETE, authorized(token), String.class).getStatusCode());
+        assertEquals(HttpStatus.NO_CONTENT, http.exchange("/api/credit-cards/" + temporaryCard.id(),
+                HttpMethod.DELETE, authorized(token), String.class).getStatusCode());
     }
 
     @Test

@@ -2,7 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
-  Account, AccountRequest, Budget, BudgetRequest, Category, CategoryRequest, DashboardSummary,
+  Account, AccountRequest, Budget, BudgetRequest, Category, CategoryRequest, CreditCard,
+  CreditCardInvoice, CreditCardRequest, DashboardSummary,
   ExpenseCategory, MonthlyPoint, Transaction, TransactionFilters,
   TransactionPage, TransactionRequest,
 } from '../models/finance.models';
@@ -41,6 +42,26 @@ export class FinanceApiService {
   }
   deleteBudget(id: string): Observable<void> {
     return this.http.delete<void>('/api/budgets/' + id);
+  }
+  creditCards(): Observable<CreditCard[]> {
+    return this.http.get<CreditCard[]>('/api/credit-cards');
+  }
+  saveCreditCard(request: CreditCardRequest, id?: string): Observable<CreditCard> {
+    return id ? this.http.put<CreditCard>('/api/credit-cards/' + id, request)
+      : this.http.post<CreditCard>('/api/credit-cards', request);
+  }
+  deleteCreditCard(id: string): Observable<void> {
+    return this.http.delete<void>('/api/credit-cards/' + id);
+  }
+  creditCardInvoice(cardId: string, month: string): Observable<CreditCardInvoice> {
+    return this.http.get<CreditCardInvoice>('/api/credit-cards/' + cardId + '/invoices', {
+      params: new HttpParams().set('month', month),
+    });
+  }
+  payCreditCardInvoice(cardId: string, invoiceId: string, accountId: string): Observable<CreditCardInvoice> {
+    return this.http.post<CreditCardInvoice>(
+      '/api/credit-cards/' + cardId + '/invoices/' + invoiceId + '/payments', { accountId },
+    );
   }
   transactions(filters: TransactionFilters = {}): Observable<TransactionPage> {
     let params = new HttpParams();

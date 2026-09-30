@@ -17,14 +17,13 @@ public interface AccountRepository extends JpaRepository<AccountEntity, UUID> {
 
     @Query(value = """
             SELECT a.id AS "accountId",
-                   a.initial_balance + COALESCE(SUM(
-                       CASE WHEN t.type = 'INCOME' THEN t.amount
-                            WHEN t.type = 'EXPENSE' THEN -t.amount
-                            ELSE 0 END), 0) AS "currentBalance"
+                   a.initial_balance
+                   + COALESCE((SELECT SUM(CASE WHEN t.type = 'INCOME' THEN t.amount ELSE -t.amount END)
+                               FROM transactions t WHERE t.account_id = a.id AND t.user_id = a.user_id), 0)
+                   - COALESCE((SELECT SUM(p.amount) FROM credit_card_invoice_payments p
+                               WHERE p.account_id = a.id AND p.user_id = a.user_id), 0) AS "currentBalance"
             FROM accounts a
-            LEFT JOIN transactions t ON t.account_id = a.id AND t.user_id = a.user_id
             WHERE a.user_id = :userId
-            GROUP BY a.id, a.initial_balance
             """, nativeQuery = true)
     List<AccountBalanceProjection> findBalancesByUserId(@Param("userId") UUID userId);
 

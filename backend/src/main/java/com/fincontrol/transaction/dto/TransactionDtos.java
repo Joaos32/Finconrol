@@ -25,16 +25,22 @@ public final class TransactionDtos {
             BigDecimal amount,
             @NotNull(message = "Selecione receita ou despesa.")
             TransactionType type,
-            @NotNull(message = "Selecione a conta.")
             UUID accountId,
+            UUID cardId,
             @NotNull(message = "Selecione a categoria.")
             UUID categoryId,
             @NotNull(message = "Informe a data da transação.")
             LocalDate transactionDate
-    ) { }
+    ) {
+        public Request(String description, BigDecimal amount, TransactionType type, UUID accountId,
+                       UUID categoryId, LocalDate transactionDate) {
+            this(description, amount, type, accountId, null, categoryId, transactionDate);
+        }
+    }
 
     public record Response(UUID id, String description, BigDecimal amount, TransactionType type,
-                           UUID accountId, String accountName, UUID categoryId, String categoryName,
+                           UUID accountId, String accountName, UUID cardId, String cardName,
+                           UUID categoryId, String categoryName,
                            LocalDate transactionDate, Instant createdAt, Instant updatedAt) { }
 
     public record PageResponse<T>(java.util.List<T> content, int page, int size, long totalElements,

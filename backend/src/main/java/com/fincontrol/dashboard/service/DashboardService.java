@@ -44,10 +44,10 @@ public class DashboardService {
         LocalDate end = month.plusMonths(1).atDay(1);
         BigDecimal income = zeroIfNull(transactions.sumByUserAndTypeForPeriod(userId, TransactionType.INCOME, start, end));
         BigDecimal expense = zeroIfNull(transactions.sumByUserAndTypeForPeriod(userId, TransactionType.EXPENSE, start, end));
-        BigDecimal lifetimeIncome = zeroIfNull(transactions.sumByUserAndType(userId, TransactionType.INCOME));
-        BigDecimal lifetimeExpense = zeroIfNull(transactions.sumByUserAndType(userId, TransactionType.EXPENSE));
-        BigDecimal openingBalance = zeroIfNull(accounts.sumInitialBalancesByUserId(userId));
-        return new DashboardDtos.Summary(openingBalance.add(lifetimeIncome).subtract(lifetimeExpense),
+        BigDecimal currentBalance = accounts.findBalancesByUserId(userId).stream()
+                .map(row -> zeroIfNull(row.getCurrentBalance()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new DashboardDtos.Summary(currentBalance,
                 income, expense, income.subtract(expense));
     }
 

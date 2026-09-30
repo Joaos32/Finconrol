@@ -2,6 +2,8 @@ package com.fincontrol.transaction.entity;
 
 import com.fincontrol.account.entity.AccountEntity;
 import com.fincontrol.category.entity.CategoryEntity;
+import com.fincontrol.creditcard.entity.CreditCardEntity;
+import com.fincontrol.creditcard.entity.CreditCardInvoiceEntity;
 import com.fincontrol.user.entity.AuditedEntity;
 import com.fincontrol.user.entity.UserEntity;
 import jakarta.persistence.Column;
@@ -31,9 +33,17 @@ public class TransactionEntity extends AuditedEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "account_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id")
     private AccountEntity account;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "card_id")
+    private CreditCardEntity card;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "invoice_id")
+    private CreditCardInvoiceEntity invoice;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id", nullable = false)
@@ -56,8 +66,16 @@ public class TransactionEntity extends AuditedEntity {
 
     public TransactionEntity(UserEntity user, AccountEntity account, CategoryEntity category,
                              String description, BigDecimal amount, TransactionType type, LocalDate transactionDate) {
+        this(user, account, null, null, category, description, amount, type, transactionDate);
+    }
+
+    public TransactionEntity(UserEntity user, AccountEntity account, CreditCardEntity card,
+                             CreditCardInvoiceEntity invoice, CategoryEntity category,
+                             String description, BigDecimal amount, TransactionType type, LocalDate transactionDate) {
         this.user = user;
         this.account = account;
+        this.card = card;
+        this.invoice = invoice;
         this.category = category;
         this.description = description;
         this.amount = amount;
@@ -68,6 +86,8 @@ public class TransactionEntity extends AuditedEntity {
     public UUID getId() { return id; }
     public UserEntity getUser() { return user; }
     public AccountEntity getAccount() { return account; }
+    public CreditCardEntity getCard() { return card; }
+    public CreditCardInvoiceEntity getInvoice() { return invoice; }
     public CategoryEntity getCategory() { return category; }
     public String getDescription() { return description; }
     public BigDecimal getAmount() { return amount; }
@@ -75,7 +95,15 @@ public class TransactionEntity extends AuditedEntity {
     public LocalDate getTransactionDate() { return transactionDate; }
     public void update(AccountEntity account, CategoryEntity category, String description,
                        BigDecimal amount, TransactionType type, LocalDate transactionDate) {
+        update(account, null, null, category, description, amount, type, transactionDate);
+    }
+
+    public void update(AccountEntity account, CreditCardEntity card, CreditCardInvoiceEntity invoice,
+                       CategoryEntity category, String description, BigDecimal amount,
+                       TransactionType type, LocalDate transactionDate) {
         this.account = account;
+        this.card = card;
+        this.invoice = invoice;
         this.category = category;
         this.description = description;
         this.amount = amount;

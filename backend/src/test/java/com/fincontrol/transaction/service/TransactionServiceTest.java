@@ -6,6 +6,12 @@ import com.fincontrol.account.repository.AccountRepository;
 import com.fincontrol.category.entity.CategoryEntity;
 import com.fincontrol.category.entity.CategoryType;
 import com.fincontrol.category.repository.CategoryRepository;
+import com.fincontrol.creditcard.entity.CreditCardEntity;
+import com.fincontrol.creditcard.entity.CreditCardInvoiceEntity;
+import com.fincontrol.creditcard.repository.CreditCardInvoicePaymentRepository;
+import com.fincontrol.creditcard.repository.CreditCardInvoiceRepository;
+import com.fincontrol.creditcard.repository.CreditCardCycleSettingsProjection;
+import com.fincontrol.creditcard.repository.CreditCardRepository;
 import com.fincontrol.shared.error.ApiException;
 import com.fincontrol.transaction.dto.TransactionDtos;
 import com.fincontrol.transaction.entity.TransactionEntity;
@@ -33,12 +39,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class TransactionServiceTest {
     @Mock private TransactionRepository transactions;
     @Mock private AccountRepository accounts;
     @Mock private CategoryRepository categories;
+    @Mock private CreditCardRepository creditCards;
+    @Mock private CreditCardInvoiceRepository invoices;
+    @Mock private CreditCardInvoicePaymentRepository invoicePayments;
     @Mock private UserRepository users;
     @Mock private TransactionMapper mapper;
     @InjectMocks private TransactionService service;
@@ -81,6 +92,77 @@ class TransactionServiceTest {
 
         assertEquals(404, exception.getStatus().value());
         verify(mapper, never()).toResponse(any());
+    }
+
+    @Test
+    void rejectsIncomeFromCreditCard() {
+        TransactionDtos.Request request = new TransactionDtos.Request("Salário", new BigDecimal("10.00"),
+                TransactionType.INCOME, null, UUID.randomUUID(), categoryId, LocalDate.now());
+
+        ApiException exception = assertThrows(ApiException.class, () -> service.create(userId, request));
+
+        assertEquals(400, exception.getStatus().value());
+        verifyNoInteractions(transactions);
+    }
+
+    @Test
+    void assignsCardPurchaseToTheBillingCycleContainingItsPurchaseDate() {
+        LocalDate purchaseDate = LocalDate.of(2026, 11, 28);
+        UUID cardId = UUID.randomUUID();
+        CreditCardEntity card = mock(CreditCardEntity.class);
+        CreditCardInvoiceEntity invoice = mock(CreditCardInvoiceEntity.class);
+        CreditCardCycleSettingsProjection cycleSettings = mock(CreditCardCycleSettingsProjection.class);
+        CategoryEntity category = new CategoryEntity(new UserEntity("Pessoa", "pessoa@example.com", "hash"),
+                "Mercado", CategoryType.EXPENSE);
+        when(creditCards.findByIdAndUserId(cardId, userId)).thenReturn(Optional.of(card));
+        when(creditCards.findOwnedForUpdate(cardId, userId)).thenReturn(Optional.of(card));
+        when(creditCards.findCycleSettingsForUpdate(cardId, userId)).thenReturn(Optional.of(cycleSettings));
+        when(card.getId()).thenReturn(cardId);
+        when(cycleSettings.getClosingDay()).thenReturn(28);
+        when(cycleSettings.getDueDay()).thenReturn(10);
+        when(card.getUser()).thenReturn(new UserEntity("Pessoa", "pessoa@example.com", "hash"));
+        when(invoices.findForUpdateByCardAndMonth(cardId, userId, LocalDate.of(2026, 11, 1)))
+                .thenReturn(Optional.of(invoice));
+        when(categories.findByIdAndUserId(categoryId, userId)).thenReturn(Optional.of(category));
+        when(users.getReferenceById(userId)).thenReturn(new UserEntity("Pessoa", "pessoa@example.com", "hash"));
+        when(transactions.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.create(userId, new TransactionDtos.Request("Mercado", new BigDecimal("35.50"),
+                TransactionType.EXPENSE, null, cardId, categoryId, purchaseDate));
+
+        var transaction = org.mockito.ArgumentCaptor.forClass(TransactionEntity.class);
+        verify(transactions).save(transaction.capture());
+        assertEquals(card, transaction.getValue().getCard());
+        assertEquals(invoice, transaction.getValue().getInvoice());
+        assertEquals(null, transaction.getValue().getAccount());
+    }
+
+    @Test
+    void rejectsNewCardPurchaseWhenItsDestinationInvoiceWasAlreadyPaid() {
+        LocalDate purchaseDate = LocalDate.of(2026, 11, 28);
+        UUID cardId = UUID.randomUUID();
+        UUID invoiceId = UUID.randomUUID();
+        CreditCardEntity card = mock(CreditCardEntity.class);
+        CreditCardInvoiceEntity invoice = mock(CreditCardInvoiceEntity.class);
+        CreditCardCycleSettingsProjection cycleSettings = mock(CreditCardCycleSettingsProjection.class);
+        when(creditCards.findByIdAndUserId(cardId, userId)).thenReturn(Optional.of(card));
+        when(creditCards.findOwnedForUpdate(cardId, userId)).thenReturn(Optional.of(card));
+        when(creditCards.findCycleSettingsForUpdate(cardId, userId)).thenReturn(Optional.of(cycleSettings));
+        when(card.getId()).thenReturn(cardId);
+        when(cycleSettings.getClosingDay()).thenReturn(28);
+        when(cycleSettings.getDueDay()).thenReturn(10);
+        when(card.getUser()).thenReturn(new UserEntity("Pessoa", "pessoa@example.com", "hash"));
+        when(invoice.getId()).thenReturn(invoiceId);
+        when(invoices.findForUpdateByCardAndMonth(cardId, userId, LocalDate.of(2026, 11, 1)))
+                .thenReturn(Optional.of(invoice));
+        when(invoicePayments.existsByInvoiceId(invoiceId)).thenReturn(true);
+
+        ApiException exception = assertThrows(ApiException.class, () -> service.create(userId,
+                new TransactionDtos.Request("Compra retroativa", new BigDecimal("10.00"), TransactionType.EXPENSE,
+                        null, cardId, categoryId, purchaseDate)));
+
+        assertEquals(409, exception.getStatus().value());
+        verify(transactions, never()).save(any());
     }
 
     private TransactionDtos.Request request(TransactionType type) {
