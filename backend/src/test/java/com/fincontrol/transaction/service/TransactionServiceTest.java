@@ -120,7 +120,6 @@ class TransactionServiceTest {
         when(card.getId()).thenReturn(cardId);
         when(cycleSettings.getClosingDay()).thenReturn(28);
         when(cycleSettings.getDueDay()).thenReturn(10);
-        when(card.getUser()).thenReturn(new UserEntity("Pessoa", "pessoa@example.com", "hash"));
         when(invoices.findForUpdateByCardAndMonth(cardId, userId, LocalDate.of(2026, 11, 1)))
                 .thenReturn(Optional.of(invoice));
         when(categories.findByIdAndUserId(categoryId, userId)).thenReturn(Optional.of(category));
@@ -151,7 +150,6 @@ class TransactionServiceTest {
         when(card.getId()).thenReturn(cardId);
         when(cycleSettings.getClosingDay()).thenReturn(28);
         when(cycleSettings.getDueDay()).thenReturn(10);
-        when(card.getUser()).thenReturn(new UserEntity("Pessoa", "pessoa@example.com", "hash"));
         when(invoice.getId()).thenReturn(invoiceId);
         when(invoices.findForUpdateByCardAndMonth(cardId, userId, LocalDate.of(2026, 11, 1)))
                 .thenReturn(Optional.of(invoice));

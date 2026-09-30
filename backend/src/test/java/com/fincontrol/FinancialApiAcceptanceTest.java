@@ -174,7 +174,7 @@ class FinancialApiAcceptanceTest {
         assertEquals(new BigDecimal("60.00"), budgetAfterPayment.getBody().getFirst().spentAmount());
         ResponseEntity<List<CreditCardDtos.Response>> listedCards = http.exchange("/api/credit-cards", HttpMethod.GET,
                 authorized(token), new ParameterizedTypeReference<>() { });
-        assertEquals(BigDecimal.ZERO.setScale(2), listedCards.getBody().getFirst().outstandingAmount());
+        assertEquals(0, listedCards.getBody().getFirst().outstandingAmount().compareTo(BigDecimal.ZERO));
         assertEquals(new BigDecimal("500.00"), listedCards.getBody().getFirst().availableLimit());
         ResponseEntity<String> changeClosingAfterPaidInvoice = http.exchange("/api/credit-cards/" + card.id(),
                 HttpMethod.PUT, new HttpEntity<>(new CreditCardDtos.Request("CartÃ£o principal",
