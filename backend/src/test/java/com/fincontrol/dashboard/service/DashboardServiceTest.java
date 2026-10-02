@@ -31,7 +31,7 @@ class DashboardServiceTest {
         UUID userId = UUID.randomUUID();
         when(transactions.sumByUserAndTypeForPeriod(eq(userId), eq(TransactionType.INCOME), any(), any()))
                 .thenReturn(new BigDecimal("2100.00"));
-        when(transactions.sumByUserAndTypeForPeriod(eq(userId), eq(TransactionType.EXPENSE), any(), any()))
+        when(transactions.sumExpensesByUserForPeriod(eq(userId), any(), any()))
                 .thenReturn(new BigDecimal("800.00"));
         AccountBalanceProjection balance = org.mockito.Mockito.mock(AccountBalanceProjection.class);
         when(balance.getCurrentBalance()).thenReturn(new BigDecimal("8600.00"));

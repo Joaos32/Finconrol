@@ -172,6 +172,53 @@ test('registers, logs in and completes the finance flow through Angular', async 
   await expect(updatedAccountRow).toHaveCount(0);
 });
 
+test('shows each merchant installment on its invoice and monthly budget', async ({ page }) => {
+  test.setTimeout(60_000);
+  const email = `installments-e2e-${Date.now()}@example.com`;
+  const password = 'SenhaSegura123!';
+  await page.goto('/login');
+  await page.getByRole('link', { name: 'Criar minha conta' }).click();
+  await page.getByLabel('Nome').fill('Pessoa Parcelamento');
+  await page.getByLabel('E-mail').fill(email);
+  await page.getByLabel('Senha', { exact: true }).fill(password);
+  await page.getByLabel('Confirme sua senha').fill(password);
+  await page.getByRole('button', { name: 'Criar minha conta' }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.getByRole('link', { name: /Categorias/ }).click();
+  await createCategory(page, 'Compra parcelada E2E', 'Despesa');
+  await page.getByRole('link', { name: /Cartões/ }).click();
+  await page.getByRole('button', { name: /Novo cartão/ }).click();
+  await page.getByLabel('Nome do cartão').fill('Cartão parcelado E2E');
+  await page.getByLabel('Limite de crédito').fill('500');
+  await page.getByLabel('Dia de fechamento').fill('28');
+  await page.getByLabel('Dia de vencimento').fill('5');
+  await page.getByRole('button', { name: 'Salvar cartão' }).click();
+
+  await page.getByRole('link', { name: /Transações/ }).click();
+  await createTransaction(page, {
+    description: 'Notebook parcelado E2E', amount: '100', type: 'Despesa',
+    card: 'Cartão parcelado E2E', category: 'Compra parcelada E2E', installmentCount: 4,
+  });
+  const transactionRow = page.getByRole('row', { name: /Notebook parcelado E2E/ });
+  await expect(transactionRow).toContainText('100,00');
+  await expect(transactionRow).toContainText('4 parcelas');
+
+  const invoiceMonth = invoiceMonthForPurchase(currentMonth(), new Date().getDate(), 28);
+  await page.getByRole('link', { name: /Orçamentos/ }).click();
+  await createBudget(page, 'Compra parcelada E2E', invoiceMonth, '30');
+  const budgetCard = page.locator('.budget-card').filter({ hasText: 'Compra parcelada E2E' });
+  await expect(budgetCard).toContainText('25,00');
+  await expect(budgetCard).toContainText('5,00');
+
+  await page.getByRole('link', { name: /Cartões/ }).click();
+  await page.getByLabel('Mês da fatura').fill(invoiceMonth);
+  const invoiceItems = page.locator('.invoice-items');
+  await expect(invoiceItems).toContainText('Notebook parcelado E2E');
+  await expect(invoiceItems).toContainText('Parcela 1 de 4');
+  await expect(invoiceItems).toContainText('25,00');
+});
+
 async function createCategory(page: Page, name: string, type: 'Receita' | 'Despesa'): Promise<void> {
   await page.getByRole('button', { name: /Nova categoria/ }).click();
   await page.getByLabel('Nome').fill(name);
@@ -209,6 +256,7 @@ async function createTransaction(page: Page, data: {
   account?: string;
   card?: string;
   category: string;
+  installmentCount?: number;
 }): Promise<void> {
   await page.getByRole('button', { name: /Nova transação/ }).click();
   await page.getByLabel('Descrição').fill(data.description);
@@ -222,6 +270,9 @@ async function createTransaction(page: Page, data: {
     await page.getByRole('option', { name: 'Cartão de crédito' }).click();
     await page.getByLabel('Cartão de crédito').click();
     await page.getByRole('option', { name: data.card }).click();
+    if (data.installmentCount) {
+      await page.getByLabel('Quantidade de parcelas').fill(String(data.installmentCount));
+    }
   } else {
     await page.getByLabel('Conta').first().click();
     await page.getByRole('option', { name: data.account! }).click();

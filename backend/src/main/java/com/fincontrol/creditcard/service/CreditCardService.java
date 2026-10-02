@@ -8,6 +8,7 @@ import com.fincontrol.creditcard.entity.CreditCardEntity;
 import com.fincontrol.creditcard.entity.CreditCardInvoiceEntity;
 import com.fincontrol.creditcard.entity.CreditCardInvoicePaymentEntity;
 import com.fincontrol.creditcard.repository.CreditCardInvoicePaymentRepository;
+import com.fincontrol.creditcard.repository.CreditCardInstallmentRepository;
 import com.fincontrol.creditcard.repository.CreditCardInvoiceRepository;
 import com.fincontrol.creditcard.repository.CreditCardRepository;
 import com.fincontrol.shared.error.ApiException;
@@ -32,16 +33,19 @@ public class CreditCardService {
     private final CreditCardRepository cards;
     private final CreditCardInvoiceRepository invoices;
     private final CreditCardInvoicePaymentRepository payments;
+    private final CreditCardInstallmentRepository installments;
     private final TransactionRepository transactions;
     private final AccountRepository accounts;
     private final UserRepository users;
 
     public CreditCardService(CreditCardRepository cards, CreditCardInvoiceRepository invoices,
+                             CreditCardInstallmentRepository installments,
                              CreditCardInvoicePaymentRepository payments, TransactionRepository transactions,
                              AccountRepository accounts,
                              UserRepository users) {
         this.cards = cards;
         this.invoices = invoices;
+        this.installments = installments;
         this.payments = payments;
         this.transactions = transactions;
         this.accounts = accounts;
@@ -74,7 +78,8 @@ public class CreditCardService {
             throw ApiException.conflict("Não é possível alterar o vencimento enquanto houver uma fatura em aberto.");
         }
         card.update(request.name().trim(), request.creditLimit(), request.closingDay(), request.dueDay());
-        return cardResponse(card, invoices.outstandingByCardAndUser(cardId, userId));
+        return cardResponse(card, invoices.outstandingByCardAndUser(cardId, userId)
+                .add(installments.outstandingByCardAndUser(cardId, userId)));
     }
 
     @Transactional
@@ -93,13 +98,13 @@ public class CreditCardService {
         YearMonth month = parseMonth(monthValue);
         return invoices.findByCardIdAndUserIdAndClosingMonth(cardId, userId, month.atDay(1))
                 .map(invoice -> invoiceResponse(invoice,
-                        invoices.totalByInvoiceAndUser(invoice.getId(), userId), payments.findByInvoiceId(invoice.getId()).orElse(null)))
+                        totalByInvoice(invoice.getId(), userId), payments.findByInvoiceId(invoice.getId()).orElse(null)))
                 .orElseGet(() -> {
                     CreditCardBillingCycle cycle = CreditCardBillingCycle.forPurchase(
                             month.atDay(1), card.getClosingDay(), card.getDueDay());
                     return new CreditCardDtos.InvoiceResponse(null, cardId, card.getName(), month.toString(),
                             cycle.periodStart(), cycle.closingDate(), cycle.dueDate(), ZERO,
-                            false, null, null, null);
+                            false, null, null, null, List.of());
                 });
     }
 
@@ -112,7 +117,7 @@ public class CreditCardService {
         if (payments.existsByInvoiceId(invoiceId)) {
             throw ApiException.conflict("Esta fatura já foi paga.");
         }
-        BigDecimal total = invoices.totalByInvoiceAndUser(invoiceId, userId);
+        BigDecimal total = totalByInvoice(invoiceId, userId);
         if (total.signum() <= 0) {
             throw ApiException.badRequest("Não é possível pagar uma fatura sem compras.");
         }
@@ -139,12 +144,23 @@ public class CreditCardService {
 
     private CreditCardDtos.InvoiceResponse invoiceResponse(CreditCardInvoiceEntity invoice, BigDecimal total,
                                                             CreditCardInvoicePaymentEntity payment) {
+        List<CreditCardDtos.InvoiceItem> items = new java.util.ArrayList<>();
+        transactions.findInvoiceTransactions(invoice.getId(), invoice.getUser().getId()).forEach(transaction ->
+                items.add(new CreditCardDtos.InvoiceItem(transaction.getDescription(), transaction.getAmount(), null, null)));
+        installments.findInvoiceItems(invoice.getId(), invoice.getUser().getId()).forEach(installment ->
+                items.add(new CreditCardDtos.InvoiceItem(installment.getPurchase().getDescription(), installment.getAmount(),
+                        installment.getInstallmentNumber(), installment.getInstallmentCount())));
         return new CreditCardDtos.InvoiceResponse(invoice.getId(), invoice.getCard().getId(),
                 invoice.getCard().getName(), YearMonth.from(invoice.getClosingMonth()).toString(), invoice.getPeriodStart(),
                 invoice.getClosingDate(), invoice.getDueDate(), total, payment != null,
                 payment == null ? null : payment.getPaidAt(),
                 payment == null ? null : payment.getAccount().getId(),
-                payment == null ? null : payment.getAccount().getName());
+                payment == null ? null : payment.getAccount().getName(), List.copyOf(items));
+    }
+
+    private BigDecimal totalByInvoice(UUID invoiceId, UUID userId) {
+        return invoices.totalByInvoiceAndUser(invoiceId, userId)
+                .add(installments.totalByInvoiceAndUser(invoiceId, userId));
     }
 
     private YearMonth parseMonth(String value) {

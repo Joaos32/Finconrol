@@ -37,6 +37,7 @@ import {
             <mat-form-field appearance="outline"><mat-label>Conta</mat-label><mat-select formControlName="sourceId"><mat-option value="">Selecione uma conta</mat-option>@for (account of accounts(); track account.id) { <mat-option [value]="account.id">{{ account.name }}</mat-option> }</mat-select><mat-error>Selecione uma conta.</mat-error></mat-form-field>
           } @else {
             <mat-form-field appearance="outline"><mat-label>Cartão de crédito</mat-label><mat-select formControlName="sourceId"><mat-option value="">Selecione um cartão</mat-option>@for (card of cards(); track card.id) { <mat-option [value]="card.id">{{ card.name }}</mat-option> }</mat-select><mat-error>Selecione um cartão.</mat-error></mat-form-field>
+            <mat-form-field appearance="outline"><mat-label>Quantidade de parcelas</mat-label><input matInput type="number" min="1" max="24" step="1" formControlName="installmentCount"><mat-hint>De 1 a 24, sem juros.</mat-hint><mat-error>Informe entre 1 e 24 parcelas.</mat-error></mat-form-field>
           }
           <mat-form-field appearance="outline"><mat-label>Categoria</mat-label><mat-select formControlName="categoryId"><mat-option value="">Selecione uma categoria</mat-option>@for (category of filteredCategories(); track category.id) { <mat-option [value]="category.id">{{ category.name }}</mat-option> }</mat-select><mat-error>Selecione uma categoria compatível.</mat-error></mat-form-field>
           <mat-form-field appearance="outline"><mat-label>Data</mat-label><input matInput type="date" formControlName="transactionDate"><mat-error>Informe a data.</mat-error></mat-form-field>
@@ -73,7 +74,7 @@ import {
               <td><span class="table-secondary">{{ item.accountName || item.cardName || '—' }}</span></td>
               <td><span class="table-secondary">{{ formatDate(item.transactionDate) }}</span></td>
               <td><span class="type-pill" [class.type-income]="item.type === 'INCOME'">{{ item.type === 'INCOME' ? 'Receita' : 'Despesa' }}</span></td>
-              <td class="align-right" [class.income-text]="item.type === 'INCOME'"><strong>{{ item.type === 'INCOME' ? '+' : '−' }} {{ item.amount | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</strong></td>
+              <td class="align-right" [class.income-text]="item.type === 'INCOME'"><strong>{{ item.type === 'INCOME' ? '+' : '−' }} {{ item.amount | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</strong>@if (item.installmentCount > 1) { <span class="table-secondary installment-note">{{ item.installmentCount }} parcelas</span> }</td>
               <td class="actions-cell"><button type="button" class="icon-button" aria-label="Editar transação" (click)="edit(item)">Editar</button><button type="button" class="icon-button icon-danger" aria-label="Excluir transação" (click)="remove(item)">Excluir</button></td>
             </tr>
           }</tbody>
@@ -105,6 +106,7 @@ export class TransactionsComponent implements OnInit {
     type: ['EXPENSE' as TransactionType, Validators.required],
     sourceType: ['ACCOUNT' as 'ACCOUNT' | 'CARD', Validators.required],
     sourceId: ['', Validators.required],
+    installmentCount: [1, [Validators.required, Validators.min(1), Validators.max(24)]],
     categoryId: ['', Validators.required],
     transactionDate: [this.today(), Validators.required],
   });
@@ -145,7 +147,7 @@ export class TransactionsComponent implements OnInit {
 
   openCreate(): void {
     this.editingId.set(null);
-    this.form.reset({ description: '', amount: 0, type: 'EXPENSE', sourceType: 'ACCOUNT', sourceId: '', categoryId: '', transactionDate: this.today() });
+    this.form.reset({ description: '', amount: 0, type: 'EXPENSE', sourceType: 'ACCOUNT', sourceId: '', installmentCount: 1, categoryId: '', transactionDate: this.today() });
     this.formOpen.set(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -156,6 +158,7 @@ export class TransactionsComponent implements OnInit {
       description: transaction.description, amount: transaction.amount, type: transaction.type,
       sourceType: transaction.cardId ? 'CARD' : 'ACCOUNT',
       sourceId: transaction.cardId ?? transaction.accountId ?? '',
+      installmentCount: transaction.installmentCount,
       categoryId: transaction.categoryId, transactionDate: transaction.transactionDate,
     });
     this.formOpen.set(true);
@@ -183,6 +186,7 @@ export class TransactionsComponent implements OnInit {
       type: values.type,
       accountId: values.sourceType === 'ACCOUNT' ? values.sourceId : null,
       cardId: values.sourceType === 'CARD' ? values.sourceId : null,
+      installmentCount: values.sourceType === 'CARD' ? Number(values.installmentCount) : 1,
       categoryId: values.categoryId,
       transactionDate: values.transactionDate,
     }, this.editingId() ?? undefined).subscribe({

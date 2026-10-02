@@ -9,6 +9,7 @@ import com.fincontrol.category.repository.CategoryRepository;
 import com.fincontrol.creditcard.entity.CreditCardEntity;
 import com.fincontrol.creditcard.entity.CreditCardInvoiceEntity;
 import com.fincontrol.creditcard.repository.CreditCardInvoicePaymentRepository;
+import com.fincontrol.creditcard.repository.CreditCardInstallmentRepository;
 import com.fincontrol.creditcard.repository.CreditCardInvoiceRepository;
 import com.fincontrol.creditcard.repository.CreditCardCycleSettingsProjection;
 import com.fincontrol.creditcard.repository.CreditCardRepository;
@@ -49,6 +50,7 @@ class TransactionServiceTest {
     @Mock private CategoryRepository categories;
     @Mock private CreditCardRepository creditCards;
     @Mock private CreditCardInvoiceRepository invoices;
+    @Mock private CreditCardInstallmentRepository installments;
     @Mock private CreditCardInvoicePaymentRepository invoicePayments;
     @Mock private UserRepository users;
     @Mock private TransactionMapper mapper;

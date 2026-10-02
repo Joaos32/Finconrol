@@ -47,6 +47,7 @@ export interface Transaction {
   categoryId: string;
   categoryName: string;
   transactionDate: string;
+  installmentCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,6 +60,7 @@ export interface TransactionRequest {
   cardId: string | null;
   categoryId: string;
   transactionDate: string;
+  installmentCount: number;
 }
 
 export interface TransactionPage {
@@ -113,6 +115,14 @@ export interface CreditCardInvoice {
   paidAt: string | null;
   paymentAccountId: string | null;
   paymentAccountName: string | null;
+  items: CreditCardInvoiceItem[];
+}
+
+export interface CreditCardInvoiceItem {
+  description: string;
+  amount: number;
+  installmentNumber: number | null;
+  installmentCount: number | null;
 }
 
 export interface DashboardSummary {

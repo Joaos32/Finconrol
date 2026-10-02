@@ -43,7 +43,7 @@ public class DashboardService {
         LocalDate start = month.atDay(1);
         LocalDate end = month.plusMonths(1).atDay(1);
         BigDecimal income = zeroIfNull(transactions.sumByUserAndTypeForPeriod(userId, TransactionType.INCOME, start, end));
-        BigDecimal expense = zeroIfNull(transactions.sumByUserAndTypeForPeriod(userId, TransactionType.EXPENSE, start, end));
+        BigDecimal expense = zeroIfNull(transactions.sumExpensesByUserForPeriod(userId, start, end));
         BigDecimal currentBalance = accounts.findBalancesByUserId(userId).stream()
                 .map(row -> zeroIfNull(row.getCurrentBalance()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);

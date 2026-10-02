@@ -75,6 +75,13 @@ function currentMonth(): string {
               <div><span>Vencimento</span><strong>{{ formatDate(invoice()!.dueDate) }}</strong></div>
               <div><span>Status</span><strong class="invoice-status" [class.invoice-paid]="invoice()!.paid">{{ invoice()!.paid ? 'Paga' : 'Em aberto' }}</strong></div>
             </div>
+            @if (invoice()!.items.length) {
+              <div class="invoice-items" aria-label="Itens da fatura">
+                @for (item of invoice()!.items; track $index) {
+                  <div class="invoice-item"><div><strong>{{ item.description }}</strong><span>{{ item.installmentNumber ? 'Parcela ' + item.installmentNumber + ' de ' + item.installmentCount : 'Compra à vista' }}</span></div><strong>{{ item.amount | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</strong></div>
+                }
+              </div>
+            }
             @if (invoice()!.paid) {
               <div class="payment-confirmation">Fatura quitada{{ invoice()!.paymentAccountName ? ' pela conta ' + invoice()!.paymentAccountName : '' }}{{ invoice()!.paidAt ? ' em ' + formatDate(invoice()!.paidAt!.slice(0, 10)) : '' }}.</div>
             } @else if (invoice()!.totalAmount > 0) {
@@ -117,6 +124,11 @@ function currentMonth(): string {
     .invoice-summary span { color: #8d999e; font-size: 9px; }
     .invoice-summary strong { color: #3d4d55; font-size: 12px; font-weight: 650; }
     .invoice-summary > div:first-child strong { font-size: 17px; }
+    .invoice-items { display: grid; margin-top: 12px; border-top: 1px solid #edf0f1; }
+    .invoice-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 2px; border-bottom: 1px solid #edf0f1; }
+    .invoice-item > div { display: grid; gap: 4px; }
+    .invoice-item span { color: #8d999e; font-size: 9px; }
+    .invoice-item strong { color: #3d4d55; font-size: 11px; font-weight: 600; }
     .invoice-status { color: #a75a52 !important; }
     .invoice-status.invoice-paid { color: #23785f !important; }
     .invoice-payment { display: flex; align-items: center; gap: 12px; margin-top: 16px; }

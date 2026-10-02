@@ -5,9 +5,12 @@ import com.fincontrol.account.repository.AccountRepository;
 import com.fincontrol.category.entity.CategoryEntity;
 import com.fincontrol.category.repository.CategoryRepository;
 import com.fincontrol.creditcard.domain.CreditCardBillingCycle;
+import com.fincontrol.creditcard.domain.CreditCardInstallmentSchedule;
 import com.fincontrol.creditcard.entity.CreditCardEntity;
+import com.fincontrol.creditcard.entity.CreditCardInstallmentEntity;
 import com.fincontrol.creditcard.entity.CreditCardInvoiceEntity;
 import com.fincontrol.creditcard.repository.CreditCardInvoicePaymentRepository;
+import com.fincontrol.creditcard.repository.CreditCardInstallmentRepository;
 import com.fincontrol.creditcard.repository.CreditCardInvoiceRepository;
 import com.fincontrol.creditcard.repository.CreditCardRepository;
 import com.fincontrol.shared.error.ApiException;
@@ -26,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeSet;
@@ -38,18 +42,21 @@ public class TransactionService {
     private final CategoryRepository categories;
     private final CreditCardRepository creditCards;
     private final CreditCardInvoiceRepository invoices;
+    private final CreditCardInstallmentRepository installments;
     private final CreditCardInvoicePaymentRepository invoicePayments;
     private final UserRepository users;
     private final TransactionMapper mapper;
 
     public TransactionService(TransactionRepository transactions, AccountRepository accounts, CategoryRepository categories,
                               CreditCardRepository creditCards, CreditCardInvoiceRepository invoices,
+                              CreditCardInstallmentRepository installments,
                               CreditCardInvoicePaymentRepository invoicePayments, UserRepository users, TransactionMapper mapper) {
         this.transactions = transactions;
         this.accounts = accounts;
         this.categories = categories;
         this.creditCards = creditCards;
         this.invoices = invoices;
+        this.installments = installments;
         this.invoicePayments = invoicePayments;
         this.users = users;
         this.mapper = mapper;
@@ -89,23 +96,27 @@ public class TransactionService {
 
     @Transactional
     public TransactionDtos.Response create(UUID userId, TransactionDtos.Request request) {
+        int installmentCount = installmentCount(request);
         AccountEntity account = null;
         CreditCardEntity card = null;
         CreditCardInvoiceEntity invoice = null;
         if (request.accountId() != null && request.cardId() == null) {
+            if (installmentCount != 1) throw ApiException.badRequest("Parcelamento só pode ser usado em compras no cartão de crédito.");
             account = findAccount(userId, request.accountId());
         } else if (request.accountId() == null && request.cardId() != null && request.type() == TransactionType.EXPENSE) {
             card = creditCards.findByIdAndUserId(request.cardId(), userId)
                     .orElseThrow(() -> ApiException.notFound("Cartão"));
-            invoice = invoiceForPurchase(card, userId, request.transactionDate());
+            if (installmentCount == 1) invoice = invoiceForPurchase(card, userId, request.transactionDate());
         } else {
             throw ApiException.badRequest("Selecione uma conta ou um cartão para a transação.");
         }
         CategoryEntity category = findCategory(userId, request.categoryId());
         validateCategoryType(request.type(), category);
         TransactionEntity entity = new TransactionEntity(users.getReferenceById(userId), account, card, invoice, category,
-                request.description().trim(), request.amount(), request.type(), request.transactionDate());
-        return mapper.toResponse(transactions.save(entity));
+                request.description().trim(), request.amount(), request.type(), request.transactionDate(), installmentCount);
+        entity = transactions.save(entity);
+        if (installmentCount > 1) createInstallments(userId, entity, card, request.transactionDate(), installmentCount);
+        return mapper.toResponse(entity);
     }
 
     @Transactional
@@ -113,25 +124,32 @@ public class TransactionService {
         TransactionEntity entity = findOwned(userId, transactionId);
         lockCardsForUpdate(userId, entity, request);
         ensureInvoiceIsUnpaid(userId, entity);
+        List<CreditCardInstallmentEntity> previousInstallments = installments.findAllByPurchase(entity.getId(), userId);
+        ensureInstallmentsAreUnpaid(userId, previousInstallments);
+        List<CreditCardInvoiceEntity> previousInvoices = previousInvoices(entity, previousInstallments);
+        int installmentCount = installmentCount(request);
         AccountEntity account = null;
         CreditCardEntity card = null;
         CreditCardInvoiceEntity invoice = null;
         if (request.accountId() != null && request.cardId() == null) {
+            if (installmentCount != 1) throw ApiException.badRequest("Parcelamento só pode ser usado em compras no cartão de crédito.");
             account = findAccount(userId, request.accountId());
         } else if (request.accountId() == null && request.cardId() != null && request.type() == TransactionType.EXPENSE) {
             card = creditCards.findByIdAndUserId(request.cardId(), userId)
                     .orElseThrow(() -> ApiException.notFound("Cartão"));
-            invoice = invoiceForPurchase(card, userId, request.transactionDate());
+            if (installmentCount == 1) invoice = invoiceForPurchase(card, userId, request.transactionDate());
         } else {
             throw ApiException.badRequest("Selecione uma conta ou um cartão para a transação.");
         }
         CategoryEntity category = findCategory(userId, request.categoryId());
         validateCategoryType(request.type(), category);
-        CreditCardInvoiceEntity previousInvoice = entity.getInvoice();
-        entity.update(account, card, invoice, category, request.description().trim(), request.amount(), request.type(), request.transactionDate());
-        if (previousInvoice != null && (invoice == null || !previousInvoice.getId().equals(invoice.getId()))) {
-            removeInvoiceIfEmpty(userId, previousInvoice);
-        }
+        installments.deleteAllByPurchaseIdAndUserId(entity.getId(), userId);
+        installments.flush();
+        entity.update(account, card, invoice, category, request.description().trim(), request.amount(), request.type(),
+                request.transactionDate(), installmentCount);
+        transactions.flush();
+        if (installmentCount > 1) createInstallments(userId, entity, card, request.transactionDate(), installmentCount);
+        previousInvoices.forEach(previousInvoice -> removeInvoiceIfEmpty(userId, previousInvoice));
         return mapper.toResponse(entity);
     }
 
@@ -140,9 +158,12 @@ public class TransactionService {
         TransactionEntity entity = findOwned(userId, transactionId);
         lockCardsForUpdate(userId, entity, null);
         ensureInvoiceIsUnpaid(userId, entity);
-        CreditCardInvoiceEntity invoice = entity.getInvoice();
+        List<CreditCardInstallmentEntity> scheduled = installments.findAllByPurchase(entity.getId(), userId);
+        ensureInstallmentsAreUnpaid(userId, scheduled);
+        List<CreditCardInvoiceEntity> affectedInvoices = previousInvoices(entity, scheduled);
+        installments.deleteAllByPurchaseIdAndUserId(entity.getId(), userId);
         transactions.delete(entity);
-        if (invoice != null) removeInvoiceIfEmpty(userId, invoice);
+        affectedInvoices.forEach(invoice -> removeInvoiceIfEmpty(userId, invoice));
     }
 
     @Transactional(readOnly = true)
@@ -173,9 +194,42 @@ public class TransactionService {
                 .orElseThrow(() -> ApiException.notFound("Cartão"));
         CreditCardBillingCycle cycle = CreditCardBillingCycle.forPurchase(
                 purchaseDate, cycleSettings.getClosingDay(), cycleSettings.getDueDay());
+        return findOrCreateInvoice(lockedCard, userId, cycle);
+    }
+
+    private List<CreditCardInstallmentEntity> createInstallments(UUID userId, TransactionEntity purchase,
+                                                                  CreditCardEntity card, LocalDate purchaseDate,
+                                                                  int installmentCount) {
+        transactions.flush();
+        CreditCardEntity lockedCard = creditCards.findOwnedForUpdate(card.getId(), userId)
+                .orElseThrow(() -> ApiException.notFound("Cartão"));
+        var cycleSettings = creditCards.findCycleSettingsForUpdate(lockedCard.getId(), userId)
+                .orElseThrow(() -> ApiException.notFound("Cartão"));
+        CreditCardBillingCycle firstCycle = CreditCardBillingCycle.forPurchase(
+                purchaseDate, cycleSettings.getClosingDay(), cycleSettings.getDueDay());
+        List<CreditCardInstallmentSchedule.Installment> schedule;
+        try {
+            schedule = CreditCardInstallmentSchedule.create(purchase.getAmount(), installmentCount, firstCycle.closingMonth());
+        } catch (IllegalArgumentException exception) {
+            throw ApiException.badRequest("O valor da compra deve permitir pelo menos R$ 0,01 em cada parcela.");
+        }
+        List<CreditCardInstallmentEntity> scheduled = schedule.stream()
+                .map(item -> {
+                    CreditCardBillingCycle cycle = CreditCardBillingCycle.forPurchase(item.closingMonth().atDay(1),
+                            cycleSettings.getClosingDay(), cycleSettings.getDueDay());
+                    CreditCardInvoiceEntity invoice = findOrCreateInvoice(lockedCard, userId, cycle);
+                    return new CreditCardInstallmentEntity(purchase, invoice, lockedCard,
+                            users.getReferenceById(userId), item.number(), installmentCount, item.amount());
+                }).toList();
+        invoices.flush();
+        return installments.saveAll(scheduled);
+    }
+
+    private CreditCardInvoiceEntity findOrCreateInvoice(CreditCardEntity card, UUID userId,
+                                                         CreditCardBillingCycle cycle) {
         LocalDate closingMonth = cycle.closingMonth().atDay(1);
-        CreditCardInvoiceEntity invoice = invoices.findForUpdateByCardAndMonth(lockedCard.getId(), userId, closingMonth)
-                .orElseGet(() -> invoices.save(new CreditCardInvoiceEntity(lockedCard, lockedCard.getUser(), closingMonth,
+        CreditCardInvoiceEntity invoice = invoices.findForUpdateByCardAndMonth(card.getId(), userId, closingMonth)
+                .orElseGet(() -> invoices.save(new CreditCardInvoiceEntity(card, card.getUser(), closingMonth,
                         cycle.periodStart(), cycle.closingDate(), cycle.dueDate())));
         if (invoicePayments.existsByInvoiceId(invoice.getId())) {
             throw ApiException.conflict("Não é possível adicionar uma compra a uma fatura já paga.");
@@ -194,9 +248,42 @@ public class TransactionService {
 
     private void removeInvoiceIfEmpty(UUID userId, CreditCardInvoiceEntity invoice) {
         transactions.flush();
-        if (transactions.countByInvoiceIdAndUserId(invoice.getId(), userId) == 0) {
+        if (transactions.countByInvoiceIdAndUserId(invoice.getId(), userId) == 0
+                && installments.countByInvoiceIdAndUserId(invoice.getId(), userId) == 0) {
             invoices.delete(invoice);
         }
+    }
+
+    private List<CreditCardInvoiceEntity> previousInvoices(TransactionEntity purchase,
+                                                            List<CreditCardInstallmentEntity> scheduled) {
+        TreeSet<UUID> seen = new TreeSet<>();
+        List<CreditCardInvoiceEntity> result = new ArrayList<>();
+        if (purchase.getInvoice() != null) {
+            seen.add(purchase.getInvoice().getId());
+            result.add(purchase.getInvoice());
+        }
+        scheduled.stream().map(CreditCardInstallmentEntity::getInvoice)
+                .sorted(Comparator.comparing(CreditCardInvoiceEntity::getClosingMonth))
+                .forEach(invoice -> {
+                    if (seen.add(invoice.getId())) result.add(invoice);
+                });
+        return List.copyOf(result);
+    }
+
+    private void ensureInstallmentsAreUnpaid(UUID userId, List<CreditCardInstallmentEntity> scheduled) {
+        scheduled.stream().map(CreditCardInstallmentEntity::getInvoice)
+                .sorted(Comparator.comparing(CreditCardInvoiceEntity::getClosingMonth))
+                .forEach(invoice -> {
+                    invoices.findOwnedForUpdate(invoice.getId(), invoice.getCard().getId(), userId)
+                            .orElseThrow(() -> ApiException.notFound("Fatura"));
+                    if (invoicePayments.existsByInvoiceId(invoice.getId())) {
+                        throw ApiException.conflict("Não é possível alterar uma compra com parcela em fatura já paga.");
+                    }
+                });
+    }
+
+    private int installmentCount(TransactionDtos.Request request) {
+        return request.installmentCount() == null ? 1 : request.installmentCount();
     }
 
     private void ensureInvoiceIsUnpaid(UUID userId, TransactionEntity transaction) {

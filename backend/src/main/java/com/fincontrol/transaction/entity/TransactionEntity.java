@@ -62,6 +62,9 @@ public class TransactionEntity extends AuditedEntity {
     @Column(name = "transaction_date", nullable = false)
     private LocalDate transactionDate;
 
+    @Column(name = "installment_count", nullable = false)
+    private int installmentCount = 1;
+
     protected TransactionEntity() { }
 
     public TransactionEntity(UserEntity user, AccountEntity account, CategoryEntity category,
@@ -72,6 +75,13 @@ public class TransactionEntity extends AuditedEntity {
     public TransactionEntity(UserEntity user, AccountEntity account, CreditCardEntity card,
                              CreditCardInvoiceEntity invoice, CategoryEntity category,
                              String description, BigDecimal amount, TransactionType type, LocalDate transactionDate) {
+        this(user, account, card, invoice, category, description, amount, type, transactionDate, 1);
+    }
+
+    public TransactionEntity(UserEntity user, AccountEntity account, CreditCardEntity card,
+                             CreditCardInvoiceEntity invoice, CategoryEntity category,
+                             String description, BigDecimal amount, TransactionType type, LocalDate transactionDate,
+                             int installmentCount) {
         this.user = user;
         this.account = account;
         this.card = card;
@@ -81,6 +91,7 @@ public class TransactionEntity extends AuditedEntity {
         this.amount = amount;
         this.type = type;
         this.transactionDate = transactionDate;
+        this.installmentCount = installmentCount;
     }
 
     public UUID getId() { return id; }
@@ -93,6 +104,7 @@ public class TransactionEntity extends AuditedEntity {
     public BigDecimal getAmount() { return amount; }
     public TransactionType getType() { return type; }
     public LocalDate getTransactionDate() { return transactionDate; }
+    public int getInstallmentCount() { return installmentCount; }
     public void update(AccountEntity account, CategoryEntity category, String description,
                        BigDecimal amount, TransactionType type, LocalDate transactionDate) {
         update(account, null, null, category, description, amount, type, transactionDate);
@@ -101,6 +113,12 @@ public class TransactionEntity extends AuditedEntity {
     public void update(AccountEntity account, CreditCardEntity card, CreditCardInvoiceEntity invoice,
                        CategoryEntity category, String description, BigDecimal amount,
                        TransactionType type, LocalDate transactionDate) {
+        update(account, card, invoice, category, description, amount, type, transactionDate, 1);
+    }
+
+    public void update(AccountEntity account, CreditCardEntity card, CreditCardInvoiceEntity invoice,
+                       CategoryEntity category, String description, BigDecimal amount,
+                       TransactionType type, LocalDate transactionDate, int installmentCount) {
         this.account = account;
         this.card = card;
         this.invoice = invoice;
@@ -109,5 +127,6 @@ public class TransactionEntity extends AuditedEntity {
         this.amount = amount;
         this.type = type;
         this.transactionDate = transactionDate;
+        this.installmentCount = installmentCount;
     }
 }

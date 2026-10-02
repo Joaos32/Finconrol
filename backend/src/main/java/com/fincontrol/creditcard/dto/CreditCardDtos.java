@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public final class CreditCardDtos {
@@ -38,8 +39,12 @@ public final class CreditCardDtos {
 
     public record PaymentRequest(@NotNull(message = "Selecione a conta de pagamento.") UUID accountId) { }
 
+    public record InvoiceItem(String description, BigDecimal amount,
+                              Integer installmentNumber, Integer installmentCount) { }
+
     public record InvoiceResponse(UUID id, UUID cardId, String cardName, String month,
                                   LocalDate periodStart, LocalDate closingDate, LocalDate dueDate,
                                   BigDecimal totalAmount, boolean paid, Instant paidAt,
-                                  UUID paymentAccountId, String paymentAccountName) { }
+                                  UUID paymentAccountId, String paymentAccountName,
+                                  List<InvoiceItem> items) { }
 }

@@ -21,4 +21,12 @@ class TransactionRequestValidationTest {
 
         assertTrue(validator.validate(request).stream().anyMatch(error -> error.getMessage().contains("maior que zero")));
     }
+
+    @Test
+    void rejectsInstallmentCountsAboveTheSupportedLimit() {
+        TransactionDtos.Request request = new TransactionDtos.Request("Compra", new BigDecimal("120.00"),
+                TransactionType.EXPENSE, null, UUID.randomUUID(), UUID.randomUUID(), LocalDate.now(), 25);
+
+        assertTrue(validator.validate(request).stream().anyMatch(error -> error.getMessage().contains("24")));
+    }
 }

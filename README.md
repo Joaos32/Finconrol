@@ -1,6 +1,6 @@
 # FinControl
 
-FinControl é um sistema de gestão financeira pessoal em monólito modular, com API Spring Boot e interface Angular. O projeto cobre a V1 e inclui orçamentos, cartões e faturas da V2.
+FinControl é um sistema de gestão financeira pessoal em monólito modular, com API Spring Boot e interface Angular. O projeto cobre a V1 e inclui orçamentos, cartões, faturas e parcelamentos da V2.
 
 ## Funcionalidades
 
@@ -8,9 +8,10 @@ FinControl é um sistema de gestão financeira pessoal em monólito modular, com
 - Dados financeiros isolados por usuário autenticado.
 - CRUD de contas, categorias e transações.
 - Paginação e filtros por período, conta, categoria e tipo.
-- Saldo das contas considera receitas, despesas e quitações de fatura; indicadores e orçamentos contam compras no cartão uma única vez.
+- Saldo das contas considera receitas, despesas e quitações de fatura; indicadores e orçamentos distribuem compras parceladas pelos meses das respectivas faturas.
 - Orçamentos mensais por categoria de despesa, com gasto, valor disponível e alerta de limite excedido.
 - Cartões com limite, fechamento, vencimento, compras vinculadas a categorias e consulta de faturas.
+- Parcelamento lojista de 1 a 24 vezes sem juros, com cada parcela exibida na fatura correspondente e centavos residuais ajustados na última.
 - Quitação integral de faturas usando uma conta financeira.
 - Migrations versionadas com Flyway.
 
@@ -24,7 +25,7 @@ FinControl é um sistema de gestão financeira pessoal em monólito modular, com
 
 Monólito modular organizado por domínio (auth, user, account, category, transaction, creditcard e dashboard). Controllers cuidam do contrato HTTP; services concentram regras de negócio; repositories limitam leituras ao usuário autenticado. DTOs são mapeados com MapStruct. O banco é atualizado exclusivamente por migrations Flyway.
 
-Compras no cartão são registradas como despesas na data da compra e contam uma vez nos relatórios e orçamentos. A quitação fica em um registro separado e reduz o saldo da conta pagadora sem criar outra despesa.
+Compras no cartão ficam registradas uma vez pelo valor integral no histórico. Compras à vista entram integralmente na fatura do ciclo; compras parceladas aparecem como parcelas mensais nas faturas e são distribuídas pelos mesmos meses nos orçamentos e relatórios. Um parcelamento pode ser editado ou excluído enquanto nenhuma de suas faturas tiver sido paga. A quitação fica em um registro separado e reduz o saldo da conta pagadora sem criar outra despesa.
 
 ## Como executar com Docker
 
@@ -54,7 +55,7 @@ O MVP guarda o access token em sessionStorage, que é limpo ao fechar a sessão 
 - POST /api/auth/register, POST /api/auth/login
 - /api/accounts e /api/accounts/{id}/balance
 - /api/categories
-- /api/transactions com paginação e filtros
+- /api/transactions com paginação e filtros; envie `installmentCount` de 1 a 24 em despesas no cartão (padrão 1)
 - /api/budgets?month=AAAA-MM para consultar orçamentos do mês; POST, PUT e DELETE em /api/budgets
 - /api/credit-cards para cadastrar, editar, listar e excluir cartões
 - /api/credit-cards/{id}/invoices?month=AAAA-MM para consultar uma fatura; POST em /api/credit-cards/{id}/invoices/{invoiceId}/payments para quitar o total
@@ -72,7 +73,7 @@ Em backend/, execute mvn test. Testes de integração PostgreSQL usam Testcontai
 ## Roadmap
 
 - V1: contas, categorias, receitas, despesas e dashboard.
-- V2: orçamentos, cartões e faturas com quitação integral (implementados); parcelamentos, recorrências e metas.
+- V2: orçamentos, cartões, faturas e parcelamentos lojista (implementados); recorrências e metas.
 - V3: relatórios, importação de extratos e insights.
 - V4: Redis, RabbitMQ, AWS e observabilidade.
 - V5: recursos de IA financeira.

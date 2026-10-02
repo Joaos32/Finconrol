@@ -26,10 +26,16 @@ public interface CreditCardRepository extends JpaRepository<CreditCardEntity, UU
                                                                             @Param("userId") UUID userId);
 
     @Query(value = """
-            SELECT c.id AS "cardId", COALESCE(SUM(CASE WHEN p.id IS NULL THEN t.amount ELSE 0 END), 0) AS "outstandingAmount"
+            SELECT c.id AS "cardId", COALESCE(SUM(CASE WHEN p.id IS NULL THEN charges.amount ELSE 0 END), 0) AS "outstandingAmount"
             FROM credit_cards c
-            LEFT JOIN credit_card_invoices i ON i.card_id = c.id AND i.user_id = c.user_id
-            LEFT JOIN transactions t ON t.invoice_id = i.id AND t.user_id = c.user_id
+            LEFT JOIN (
+                SELECT t.invoice_id, t.card_id, t.user_id, t.amount
+                FROM transactions t WHERE t.invoice_id IS NOT NULL
+                UNION ALL
+                SELECT ci.invoice_id, ci.card_id, ci.user_id, ci.amount
+                FROM credit_card_installments ci
+            ) charges ON charges.card_id = c.id AND charges.user_id = c.user_id
+            LEFT JOIN credit_card_invoices i ON i.id = charges.invoice_id AND i.card_id = c.id AND i.user_id = c.user_id
             LEFT JOIN credit_card_invoice_payments p ON p.invoice_id = i.id
             WHERE c.user_id = :userId
             GROUP BY c.id
